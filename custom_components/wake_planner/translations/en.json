@@ -1,0 +1,207 @@
+{
+  "title": "Wake Planner",
+  "config": {
+    "step": {
+      "person": {
+        "title": "Add a person",
+        "description": "Create a wake profile. The Home Assistant person entity is optional.",
+        "data": {
+          "name": "Name",
+          "person_entity_id": "Home Assistant person"
+        }
+      },
+      "calendar": {
+        "title": "Calendar sources",
+        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'. All-day skip marker titles can skip a wake.",
+        "data": {
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday calendar",
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password",
+          "calendar_wake_pattern": "Wake time regex",
+          "calendar_skip_titles": "Skip markers",
+          "holiday_behavior": "On weekend/holiday"
+        }
+      },
+      "weekly_profile": {
+        "title": "Weekly plan",
+        "description": "Configure active days and wake times.",
+        "data": {
+          "mon_active": "Mo",
+          "mon_wake_time": "Mo wake time",
+          "tue_active": "Tu",
+          "tue_wake_time": "Tu wake time",
+          "wed_active": "We",
+          "wed_wake_time": "We wake time",
+          "thu_active": "Th",
+          "thu_wake_time": "Th wake time",
+          "fri_active": "Fr",
+          "fri_wake_time": "Fr wake time",
+          "sat_active": "Sa",
+          "sat_wake_time": "Sa wake time",
+          "sun_active": "Su",
+          "sun_wake_time": "Su wake time"
+        }
+      },
+      "sleep_target": {
+        "title": "Sleep target and wake window",
+        "data": {
+          "target_sleep_hours": "Target sleep duration (hours)",
+          "wake_window_minutes": "Wake window tolerance (± minutes)"
+        }
+      },
+      "more_people": {
+        "title": "More people?",
+        "data": {
+          "add_another": "Add another person"
+        }
+      }
+    },
+    "error": {
+      "invalid_name": "Enter a valid name.",
+      "duplicate_person": "A person with this name already exists.",
+      "invalid_time": "Enter wake times as HH:MM."
+    },
+    "abort": {
+      "already_configured": "Wake Planner is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "calendar": {
+        "title": "Edit calendars",
+        "data": {
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday calendar",
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password",
+          "calendar_wake_pattern": "Wake time regex",
+          "calendar_skip_titles": "Skip markers",
+          "holiday_behavior": "On weekend/holiday"
+        }
+      },
+      "person": {
+        "title": "Edit person",
+        "data": {
+          "name": "Name",
+          "person_entity_id": "Home Assistant person"
+        }
+      },
+      "weekly_profile": {
+        "title": "Edit weekly plan",
+        "data": {
+          "mon_active": "Mo",
+          "mon_wake_time": "Mo wake time",
+          "tue_active": "Tu",
+          "tue_wake_time": "Tu wake time",
+          "wed_active": "We",
+          "wed_wake_time": "We wake time",
+          "thu_active": "Th",
+          "thu_wake_time": "Th wake time",
+          "fri_active": "Fr",
+          "fri_wake_time": "Fr wake time",
+          "sat_active": "Sa",
+          "sat_wake_time": "Sa wake time",
+          "sun_active": "Su",
+          "sun_wake_time": "Su wake time"
+        }
+      },
+      "sleep_target": {
+        "title": "Edit sleep settings",
+        "data": {
+          "target_sleep_hours": "Target sleep duration (hours)",
+          "wake_window_minutes": "Wake window tolerance (± minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "wake_needed": {
+        "name": "Wake needed"
+      }
+    },
+    "sensor": {
+      "wake_state": {
+        "name": "Wake state",
+        "state": {
+          "scheduled": "Scheduled",
+          "skipped": "Skipped",
+          "overridden": "Overridden",
+          "holiday": "Holiday",
+          "inactive": "Inactive"
+        }
+      },
+      "next_wake": {
+        "name": "Next wake"
+      },
+      "sleep_duration_avg": {
+        "name": "Average sleep duration"
+      },
+      "suggested_bedtime": {
+        "name": "Suggested bedtime"
+      }
+    }
+  },
+  "services": {
+    "skip_next": {
+      "name": "Skip next wake",
+      "description": "Skip the next wake for a person.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID",
+          "description": "Wake Planner person slug."
+        }
+      }
+    },
+    "set_override": {
+      "name": "Set override",
+      "description": "Set a manual wake time override.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID"
+        },
+        "wake_time": {
+          "name": "Wake time"
+        },
+        "until": {
+          "name": "Until date"
+        }
+      }
+    },
+    "clear_override": {
+      "name": "Clear override",
+      "description": "Clear manual override and skip state.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID"
+        }
+      }
+    },
+    "log_sleep": {
+      "name": "Log sleep",
+      "description": "Add a manual sleep log entry.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID"
+        },
+        "sleep_time": {
+          "name": "Sleep time"
+        },
+        "wake_time": {
+          "name": "Wake time"
+        }
+      }
+    }
+  },
+  "selector": {
+    "holiday_behavior": {
+      "options": {
+        "skip": "Skip wake",
+        "weekend_profile": "Use weekend profile"
+      }
+    }
+  }
+}
