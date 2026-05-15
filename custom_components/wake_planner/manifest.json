@@ -5,7 +5,7 @@
   "config_flow": true,
   "documentation": "https://github.com/Levtos/wake-planner",
   "requirements": [],
-  "dependencies": ["workdays"],
+  "dependencies": [],
   "codeowners": ["@Levtos"],
   "iot_class": "local_push",
   "hacs": "1.0.0"

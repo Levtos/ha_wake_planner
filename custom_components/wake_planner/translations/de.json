@@ -44,10 +44,10 @@
         }
       },
       "holidays": {
-        "title": "Feiertage und Arbeitstage",
+        "title": "Feiertage und Wochenenden",
         "data": {
-          "workday_entity_id": "Workday-Sensor",
-          "holiday_behavior": "Wenn der Workday-Sensor aus ist"
+          "holiday_behavior": "Wenn Wochenende oder Feiertag erkannt wird",
+          "holiday_calendar_entity_id": "Feiertagskalender"
         }
       },
       "calendar": {

@@ -26,7 +26,7 @@ from .const import (
     CONF_TARGET_SLEEP_HOURS,
     CONF_WAKE_WINDOW_MINUTES,
     CONF_WEEKLY_PROFILE,
-    CONF_WORKDAY_ENTITY_ID,
+    CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     DAYS,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
@@ -154,7 +154,7 @@ def _sleep_schema() -> vol.Schema:
 
 def _holiday_schema() -> vol.Schema:
     return vol.Schema({
-        vol.Optional(CONF_WORKDAY_ENTITY_ID): selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])),
+        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
         vol.Required(CONF_HOLIDAY_BEHAVIOR, default=HOLIDAY_SKIP): selector.SelectSelector(
             selector.SelectSelectorConfig(options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE], mode=selector.SelectSelectorMode.DROPDOWN)
         ),

@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_WORKDAY_ENTITY_ID, DOMAIN
+from .const import CONF_HOLIDAY_CALENDAR_ENTITY_ID, DOMAIN
 from .coordinator import WakePlannerCoordinator
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
@@ -30,6 +30,6 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         })
     return {
         "persons": persons,
-        "workday_sensor": coordinator.options.get(CONF_WORKDAY_ENTITY_ID),
+        "holiday_calendar": coordinator.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
         "coordinator_last_update": coordinator.last_update_iso,
     }

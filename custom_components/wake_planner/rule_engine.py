@@ -141,7 +141,7 @@ class RuleEngine:
                     wake_time=None,
                     state=WakeState.HOLIDAY,
                     decided_by="holiday",
-                    reason=holiday_name or "Workday sensor is off",
+                    reason=holiday_name or "Holiday calendar event or weekend",
                     profile_day=profile_day,
                     holiday_name=holiday_name,
                     skip_active=runtime.skip_next,

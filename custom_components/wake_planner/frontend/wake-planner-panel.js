@@ -117,7 +117,7 @@ class WakePlannerPanel extends HTMLElement {
   }
 
   _renderSettings(slug, name, state) {
-    return `<ha-card><h2>${name}</h2><p>CalDAV and workday status are available through diagnostics and entity attributes.</p><p>Current workday/holiday reason: ${state.attributes.holiday_name || '—'}</p><button data-options="1">Open integration options</button><button>Test CalDAV</button></ha-card>`;
+    return `<ha-card><h2>${name}</h2><p>CalDAV and holiday calendar status are available through diagnostics and entity attributes.</p><p>Current holiday/weekend reason: ${state.attributes.holiday_name || '—'}</p><button data-options="1">Open integration options</button><button>Test CalDAV</button></ha-card>`;
   }
 }
 customElements.define('wake-planner-panel', WakePlannerPanel);

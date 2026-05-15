@@ -23,7 +23,7 @@ from .const import (
     CONF_HOLIDAY_BEHAVIOR,
     CONF_PERSONS,
     CONF_SLUG,
-    CONF_WORKDAY_ENTITY_ID,
+    CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
     DOMAIN,
@@ -34,7 +34,7 @@ from .const import (
     RuntimePersonState,
     WakeDecision,
 )
-from .holiday_source import current_holiday_map
+from .holiday_source import async_holiday_map
 from .rule_engine import RuleEngine, parse_date, parse_time
 from .util import persons_from_entry
 
@@ -94,10 +94,11 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         calendar_decisions = await self.calendar_source.async_get_decisions(
             [person.slug for person in self.persons], start, start + timedelta(days=14)
         )
-        holiday_map = current_holiday_map(
+        holiday_map = await async_holiday_map(
             self.hass,
-            self.options.get(CONF_WORKDAY_ENTITY_ID),
-            now.date(),
+            self.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
+            start.date(),
+            (start + timedelta(days=14)).date(),
         )
         engine = RuleEngine(
             runtime_states=self.runtime_states,
