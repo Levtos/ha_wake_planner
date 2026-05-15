@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant import config_entries
 
-from .config_flow import _calendar_schema, _holiday_schema, _person_schema, _sleep_schema, _validate_time, _weekly_schema
-from .const import CONF_PERSONS, CONF_WEEKLY_PROFILE, DAYS
+from .config_flow import (
+    CALENDAR_OPTION_KEYS,
+    _calendar_schema,
+    _clean_calendar_input,
+    _person_schema,
+    _sleep_schema,
+    _weekly_from_input,
+    _weekly_schema,
+)
+from .const import CONF_PERSONS, CONF_WEEKLY_PROFILE
 from .util import default_weekly_profile
+
 
 class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     """Edit Wake Planner settings without YAML."""
@@ -23,7 +30,16 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Entry point."""
-        return await self.async_step_person()
+        return await self.async_step_calendar()
+
+    async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
+        """Edit calendar settings and holiday behavior."""
+        if user_input is not None:
+            for key in CALENDAR_OPTION_KEYS:
+                self._options.pop(key, None)
+            self._options.update(_clean_calendar_input(user_input))
+            return await self.async_step_person()
+        return self.async_show_form(step_id="calendar", data_schema=_calendar_schema(self._options))
 
     async def async_step_person(self, user_input: dict[str, Any] | None = None):
         """Edit the current person basics."""
@@ -31,9 +47,9 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             self._persons = [{"name": "Person", "slug": "person"}]
         person = self._persons[self._index]
         if user_input is not None:
-            person.update(user_input)
+            person.update({key: value or None for key, value in user_input.items()})
             return await self.async_step_weekly_profile()
-        return self.async_show_form(step_id="person", data_schema=_person_schema())
+        return self.async_show_form(step_id="person", data_schema=_person_schema(person))
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
         """Edit weekly profile."""
@@ -41,41 +57,24 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         person = self._persons[self._index]
         if user_input is not None:
             try:
-                person[CONF_WEEKLY_PROFILE] = {
-                    day: {"active": user_input[f"{day}_active"], "wake_time": _validate_time(user_input[f"{day}_wake_time"])}
-                    for day in DAYS
-                }
+                person[CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
             except ValueError:
                 errors["base"] = "invalid_time"
             else:
-                return await self.async_step_sleep()
+                return await self.async_step_sleep_target()
         return self.async_show_form(
             step_id="weekly_profile",
             data_schema=_weekly_schema(person.get(CONF_WEEKLY_PROFILE) or default_weekly_profile()),
             errors=errors,
         )
 
-    async def async_step_sleep(self, user_input: dict[str, Any] | None = None):
+    async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
         """Edit sleep settings."""
         if user_input is not None:
             self._persons[self._index].update(user_input)
             self._index += 1
             if self._index < len(self._persons):
                 return await self.async_step_person()
-            return await self.async_step_holidays()
-        return self.async_show_form(step_id="sleep", data_schema=_sleep_schema())
-
-    async def async_step_holidays(self, user_input: dict[str, Any] | None = None):
-        """Edit holiday settings."""
-        if user_input is not None:
-            self._options.update(user_input)
-            return await self.async_step_calendar()
-        return self.async_show_form(step_id="holidays", data_schema=_holiday_schema())
-
-    async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
-        """Edit calendar settings."""
-        if user_input is not None:
-            self._options.update(user_input)
             self._options[CONF_PERSONS] = self._persons
             return self.async_create_entry(title="", data=self._options)
-        return self.async_show_form(step_id="calendar", data_schema=_calendar_schema())
+        return self.async_show_form(step_id="sleep_target", data_schema=_sleep_schema(self._persons[self._index]))

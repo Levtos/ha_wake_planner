@@ -21,8 +21,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def parse_time(value: str) -> time:
-    """Parse a HH:MM time string."""
-    hour, minute = value.strip().split(":", 1)
+    """Parse a HH:MM or HH:MM:SS time string."""
+    parts = value.strip().split(":")
+    if len(parts) not in (2, 3):
+        raise ValueError("time must be in HH:MM format")
+    hour, minute = parts[:2]
     parsed = time(int(hour), int(minute))
     if parsed.hour > 23:
         raise ValueError("hour must be between 0 and 23")

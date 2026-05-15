@@ -47,10 +47,10 @@ class CalendarSource:
         skip_titles: list[str],
     ) -> None:
         self.hass = hass
-        self.calendar_entity_id = calendar_entity_id
-        self.caldav_url = caldav_url
-        self.caldav_username = caldav_username
-        self.caldav_password = caldav_password
+        self.calendar_entity_id = calendar_entity_id or None
+        self.caldav_url = caldav_url or None
+        self.caldav_username = caldav_username or None
+        self.caldav_password = caldav_password or None
         self.wake_re = re.compile(wake_pattern or DEFAULT_CALENDAR_WAKE_PATTERN, re.IGNORECASE)
         self.skip_titles = [title.strip().lower() for title in skip_titles if title.strip()]
         self.status = CalendarSourceStatus()

@@ -48,6 +48,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def _async_register_panel(hass: HomeAssistant) -> None:
     """Serve and register the Wake Planner custom panel."""
+    if "wake-planner" in hass.data.get("frontend_panels", {}):
+        return
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths([
         frontend.StaticPathConfig("/wake_planner/frontend", str(frontend_dir), cache_headers=False)

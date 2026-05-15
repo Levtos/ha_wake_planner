@@ -2,7 +2,7 @@
   "title": "Wake Planner",
   "config": {
     "step": {
-      "user": {
+      "person": {
         "title": "Add a person",
         "description": "Create a wake profile. The Home Assistant person entity is optional.",
         "data": {
@@ -10,27 +10,41 @@
           "person_entity_id": "Home Assistant person"
         }
       },
-      "weekly_profile": {
-        "title": "Weekly wake profile",
-        "description": "Configure active days and wake times.",
+      "calendar": {
+        "title": "Calendar sources",
+        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'. All-day skip marker titles can skip a wake.",
         "data": {
-          "monday_active": "Monday active",
-          "monday_wake_time": "Monday wake time",
-          "tuesday_active": "Tuesday active",
-          "tuesday_wake_time": "Tuesday wake time",
-          "wednesday_active": "Wednesday active",
-          "wednesday_wake_time": "Wednesday wake time",
-          "thursday_active": "Thursday active",
-          "thursday_wake_time": "Thursday wake time",
-          "friday_active": "Friday active",
-          "friday_wake_time": "Friday wake time",
-          "saturday_active": "Saturday active",
-          "saturday_wake_time": "Saturday wake time",
-          "sunday_active": "Sunday active",
-          "sunday_wake_time": "Sunday wake time"
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday calendar",
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password",
+          "calendar_wake_pattern": "Wake time regex",
+          "calendar_skip_titles": "Skip markers",
+          "holiday_behavior": "On weekend/holiday"
         }
       },
-      "sleep": {
+      "weekly_profile": {
+        "title": "Weekly plan",
+        "description": "Configure active days and wake times.",
+        "data": {
+          "mon_active": "Mo",
+          "mon_wake_time": "Mo wake time",
+          "tue_active": "Tu",
+          "tue_wake_time": "Tu wake time",
+          "wed_active": "We",
+          "wed_wake_time": "We wake time",
+          "thu_active": "Th",
+          "thu_wake_time": "Th wake time",
+          "fri_active": "Fr",
+          "fri_wake_time": "Fr wake time",
+          "sat_active": "Sa",
+          "sat_wake_time": "Sa wake time",
+          "sun_active": "Su",
+          "sun_wake_time": "Su wake time"
+        }
+      },
+      "sleep_target": {
         "title": "Sleep target and wake window",
         "data": {
           "target_sleep_hours": "Target sleep duration (hours)",
@@ -41,25 +55,6 @@
         "title": "More people?",
         "data": {
           "add_another": "Add another person"
-        }
-      },
-      "holidays": {
-        "title": "Holidays and weekends",
-        "data": {
-          "holiday_behavior": "When weekend or holiday is detected",
-          "holiday_calendar_entity_id": "Holiday calendar"
-        }
-      },
-      "calendar": {
-        "title": "Calendar sources",
-        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'. All-day skip marker titles can skip a wake.",
-        "data": {
-          "calendar_entity_id": "Home Assistant calendar",
-          "caldav_url": "CalDAV URL",
-          "caldav_username": "CalDAV username",
-          "caldav_password": "CalDAV password",
-          "calendar_wake_pattern": "Wake time regular expression",
-          "calendar_skip_titles": "All-day skip marker titles (comma separated)"
         }
       }
     },
@@ -74,6 +69,19 @@
   },
   "options": {
     "step": {
+      "calendar": {
+        "title": "Edit calendars",
+        "data": {
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday calendar",
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password",
+          "calendar_wake_pattern": "Wake time regex",
+          "calendar_skip_titles": "Skip markers",
+          "holiday_behavior": "On weekend/holiday"
+        }
+      },
       "person": {
         "title": "Edit person",
         "data": {
@@ -82,16 +90,30 @@
         }
       },
       "weekly_profile": {
-        "title": "Edit weekly profile"
+        "title": "Edit weekly plan",
+        "data": {
+          "mon_active": "Mo",
+          "mon_wake_time": "Mo wake time",
+          "tue_active": "Tu",
+          "tue_wake_time": "Tu wake time",
+          "wed_active": "We",
+          "wed_wake_time": "We wake time",
+          "thu_active": "Th",
+          "thu_wake_time": "Th wake time",
+          "fri_active": "Fr",
+          "fri_wake_time": "Fr wake time",
+          "sat_active": "Sa",
+          "sat_wake_time": "Sa wake time",
+          "sun_active": "Su",
+          "sun_wake_time": "Su wake time"
+        }
       },
-      "sleep": {
-        "title": "Edit sleep settings"
-      },
-      "holidays": {
-        "title": "Edit holidays"
-      },
-      "calendar": {
-        "title": "Edit calendars"
+      "sleep_target": {
+        "title": "Edit sleep settings",
+        "data": {
+          "target_sleep_hours": "Target sleep duration (hours)",
+          "wake_window_minutes": "Wake window tolerance (± minutes)"
+        }
       }
     }
   },
@@ -171,6 +193,14 @@
         "wake_time": {
           "name": "Wake time"
         }
+      }
+    }
+  },
+  "selector": {
+    "holiday_behavior": {
+      "options": {
+        "skip": "Skip wake",
+        "weekend_profile": "Use weekend profile"
       }
     }
   }
