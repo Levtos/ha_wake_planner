@@ -1,0 +1,8 @@
+{
+  "name": "Wake Planner",
+  "content_in_root": false,
+  "filename": "wake_planner.zip",
+  "country": [],
+  "homeassistant": "2024.1.0",
+  "category": "integration"
+}

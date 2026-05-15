@@ -1,0 +1,40 @@
+skip_next:
+  fields:
+    person_id:
+      required: true
+      selector:
+        text:
+set_override:
+  fields:
+    person_id:
+      required: true
+      selector:
+        text:
+    wake_time:
+      required: true
+      selector:
+        time:
+    until:
+      required: false
+      selector:
+        date:
+clear_override:
+  fields:
+    person_id:
+      required: true
+      selector:
+        text:
+log_sleep:
+  fields:
+    person_id:
+      required: true
+      selector:
+        text:
+    sleep_time:
+      required: true
+      selector:
+        datetime:
+    wake_time:
+      required: true
+      selector:
+        datetime:
