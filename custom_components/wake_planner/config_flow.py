@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -32,6 +33,8 @@ from .const import (
 )
 from .rule_engine import parse_time
 from .util import default_weekly_profile
+
+_LOGGER = logging.getLogger(__name__)
 
 DAY_FIELDS = {
     "monday": "mon",
@@ -114,8 +117,8 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
         """Configure sleep target and wake window."""
         if user_input is not None:
-            self._person[CONF_TARGET_SLEEP_HOURS] = user_input[CONF_TARGET_SLEEP_HOURS]
-            self._person[CONF_WAKE_WINDOW_MINUTES] = user_input[CONF_WAKE_WINDOW_MINUTES]
+            self._person[CONF_TARGET_SLEEP_HOURS] = float(user_input[CONF_TARGET_SLEEP_HOURS])
+            self._person[CONF_WAKE_WINDOW_MINUTES] = int(user_input[CONF_WAKE_WINDOW_MINUTES])
             self._persons.append(self._person)
             return await self.async_step_more_people()
         return self.async_show_form(step_id="sleep_target", data_schema=_sleep_schema())
@@ -132,7 +135,9 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title="Wake Planner", data=data)
         return self.async_show_form(
             step_id="more_people",
-            data_schema=vol.Schema({vol.Required("add_another", default=False): bool}),
+            data_schema=vol.Schema({
+                vol.Required("add_another", default=False): selector.BooleanSelector(),
+            }),
         )
 
 
@@ -155,8 +160,10 @@ def _optional_entity(key: str, defaults: dict) -> vol.Optional:
 def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
-        vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): str,
-        _optional_entity(CONF_PERSON_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
+        vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): selector.TextSelector(),
+        _optional_entity(CONF_PERSON_ENTITY_ID, defaults): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="person")
+        ),
     })
 
 
@@ -165,7 +172,7 @@ def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     fields: dict[Any, Any] = {}
     for day in DAYS:
         prefix = DAY_FIELDS[day]
-        fields[vol.Required(f"{prefix}_active", default=defaults.get(day, {}).get("active", True))] = bool
+        fields[vol.Required(f"{prefix}_active", default=defaults.get(day, {}).get("active", True))] = selector.BooleanSelector()
         fields[vol.Required(f"{prefix}_wake_time", default=defaults.get(day, {}).get("wake_time", DEFAULT_WAKE_TIME))] = selector.TimeSelector(
             selector.TimeSelectorConfig(has_seconds=False)
         )
@@ -175,16 +182,40 @@ def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
-        vol.Required(CONF_TARGET_SLEEP_HOURS, default=defaults.get(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)): vol.Coerce(float),
-        vol.Required(CONF_WAKE_WINDOW_MINUTES, default=defaults.get(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+        vol.Required(
+            CONF_TARGET_SLEEP_HOURS,
+            default=float(defaults.get(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                mode=selector.NumberSelectorMode.BOX,
+                min=4,
+                max=12,
+                step=0.5,
+            )
+        ),
+        vol.Required(
+            CONF_WAKE_WINDOW_MINUTES,
+            default=int(defaults.get(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                mode=selector.NumberSelectorMode.BOX,
+                min=1,
+                max=60,
+                step=1,
+            )
+        ),
     })
 
 
 def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
-        _optional_entity(CONF_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        _optional_entity(CONF_HOLIDAY_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
+        _optional_entity(CONF_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        ),
+        _optional_entity(CONF_HOLIDAY_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        ),
         vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
@@ -204,7 +235,7 @@ def _weekly_from_input(user_input: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Convert compact day field names into the stored weekly profile format."""
     return {
         day: {
-            "active": user_input[f"{prefix}_active"],
+            "active": bool(user_input[f"{prefix}_active"]),
             "wake_time": _validate_time(user_input[f"{prefix}_wake_time"]),
         }
         for day, prefix in DAY_FIELDS.items()

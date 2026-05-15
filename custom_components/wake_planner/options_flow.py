@@ -71,7 +71,12 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
         """Edit sleep settings."""
         if user_input is not None:
-            self._persons[self._index].update(user_input)
+            from .const import CONF_TARGET_SLEEP_HOURS, CONF_WAKE_WINDOW_MINUTES
+            self._persons[self._index].update({
+                **user_input,
+                CONF_TARGET_SLEEP_HOURS: float(user_input[CONF_TARGET_SLEEP_HOURS]),
+                CONF_WAKE_WINDOW_MINUTES: int(user_input[CONF_WAKE_WINDOW_MINUTES]),
+            })
             self._index += 1
             if self._index < len(self._persons):
                 return await self.async_step_person()

@@ -42,8 +42,8 @@
       "sleep_target": {
         "title": "Schlafziel und Weckfenster",
         "data": {
-          "target_sleep_hours": "Ziel-Schlafdauer (Stunden)",
-          "wake_window_minutes": "Weckfenster-Toleranz (± Minuten)"
+          "target_sleep_hours": "Ziel-Schlafdauer (h)",
+          "wake_window_minutes": "Weckfenster-Toleranz (min)"
         }
       },
       "more_people": {
@@ -101,8 +101,8 @@
       "sleep_target": {
         "title": "Schlafeinstellungen bearbeiten",
         "data": {
-          "target_sleep_hours": "Ziel-Schlafdauer (Stunden)",
-          "wake_window_minutes": "Weckfenster-Toleranz (± Minuten)"
+          "target_sleep_hours": "Ziel-Schlafdauer (h)",
+          "wake_window_minutes": "Weckfenster-Toleranz (min)"
         }
       }
     }
