@@ -12,36 +12,31 @@
       },
       "calendar": {
         "title": "Calendar sources",
-        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'. All-day skip marker titles can skip a wake.",
+        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'.",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday calendar",
-          "caldav_url": "CalDAV URL",
-          "caldav_username": "CalDAV username",
-          "caldav_password": "CalDAV password",
-          "calendar_wake_pattern": "Wake time regex",
-          "calendar_skip_titles": "Skip markers",
-          "holiday_behavior": "On weekend/holiday"
+          "holiday_behavior": "Behaviour on weekends/holidays"
         }
       },
       "weekly_profile": {
         "title": "Weekly plan",
         "description": "Configure active days and wake times.",
         "data": {
-          "mon_active": "Mo",
-          "mon_wake_time": "Mo wake time",
-          "tue_active": "Tu",
-          "tue_wake_time": "Tu wake time",
-          "wed_active": "We",
-          "wed_wake_time": "We wake time",
-          "thu_active": "Th",
-          "thu_wake_time": "Th wake time",
-          "fri_active": "Fr",
-          "fri_wake_time": "Fr wake time",
-          "sat_active": "Sa",
-          "sat_wake_time": "Sa wake time",
-          "sun_active": "Su",
-          "sun_wake_time": "Su wake time"
+          "mon_active": "Mon active",
+          "mon_wake_time": "Mon – Wake time",
+          "tue_active": "Tue active",
+          "tue_wake_time": "Tue – Wake time",
+          "wed_active": "Wed active",
+          "wed_wake_time": "Wed – Wake time",
+          "thu_active": "Thu active",
+          "thu_wake_time": "Thu – Wake time",
+          "fri_active": "Fri active",
+          "fri_wake_time": "Fri – Wake time",
+          "sat_active": "Sat active",
+          "sat_wake_time": "Sat – Wake time",
+          "sun_active": "Sun active",
+          "sun_wake_time": "Sun – Wake time"
         }
       },
       "sleep_target": {
@@ -74,12 +69,7 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday calendar",
-          "caldav_url": "CalDAV URL",
-          "caldav_username": "CalDAV username",
-          "caldav_password": "CalDAV password",
-          "calendar_wake_pattern": "Wake time regex",
-          "calendar_skip_titles": "Skip markers",
-          "holiday_behavior": "On weekend/holiday"
+          "holiday_behavior": "Behaviour on weekends/holidays"
         }
       },
       "person": {
@@ -92,20 +82,20 @@
       "weekly_profile": {
         "title": "Edit weekly plan",
         "data": {
-          "mon_active": "Mo",
-          "mon_wake_time": "Mo wake time",
-          "tue_active": "Tu",
-          "tue_wake_time": "Tu wake time",
-          "wed_active": "We",
-          "wed_wake_time": "We wake time",
-          "thu_active": "Th",
-          "thu_wake_time": "Th wake time",
-          "fri_active": "Fr",
-          "fri_wake_time": "Fr wake time",
-          "sat_active": "Sa",
-          "sat_wake_time": "Sa wake time",
-          "sun_active": "Su",
-          "sun_wake_time": "Su wake time"
+          "mon_active": "Mon active",
+          "mon_wake_time": "Mon – Wake time",
+          "tue_active": "Tue active",
+          "tue_wake_time": "Tue – Wake time",
+          "wed_active": "Wed active",
+          "wed_wake_time": "Wed – Wake time",
+          "thu_active": "Thu active",
+          "thu_wake_time": "Thu – Wake time",
+          "fri_active": "Fri active",
+          "fri_wake_time": "Fri – Wake time",
+          "sat_active": "Sat active",
+          "sat_wake_time": "Sat – Wake time",
+          "sun_active": "Sun active",
+          "sun_wake_time": "Sun – Wake time"
         }
       },
       "sleep_target": {
