@@ -12,12 +12,7 @@ from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
 from .const import (
-    CONF_CALDAV_PASSWORD,
-    CONF_CALDAV_URL,
-    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
-    CONF_CALENDAR_SKIP_TITLES,
-    CONF_CALENDAR_WAKE_PATTERN,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_PERSON_ENTITY_ID,
@@ -28,8 +23,6 @@ from .const import (
     CONF_WAKE_WINDOW_MINUTES,
     CONF_WEEKLY_PROFILE,
     DAYS,
-    DEFAULT_CALENDAR_SKIP_TITLES,
-    DEFAULT_CALENDAR_WAKE_PATTERN,
     DEFAULT_TARGET_SLEEP_HOURS,
     DEFAULT_WAKE_TIME,
     DEFAULT_WAKE_WINDOW_MINUTES,
@@ -52,13 +45,10 @@ DAY_FIELDS = {
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-    CONF_CALDAV_URL,
-    CONF_CALDAV_USERNAME,
-    CONF_CALDAV_PASSWORD,
-    CONF_CALENDAR_WAKE_PATTERN,
-    CONF_CALENDAR_SKIP_TITLES,
     CONF_HOLIDAY_BEHAVIOR,
 }
+
+_OPTIONAL_ENTITY_FIELDS = {CONF_CALENDAR_ENTITY_ID, CONF_HOLIDAY_CALENDAR_ENTITY_ID}
 
 
 class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -146,11 +136,19 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+def _normalize(data: dict) -> dict:
+    """Replace empty strings with None for optional entity fields."""
+    return {
+        k: (None if k in _OPTIONAL_ENTITY_FIELDS and v == "" else v)
+        for k, v in data.items()
+    }
+
+
 def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
         vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): str,
-        vol.Optional(CONF_PERSON_ENTITY_ID, default=defaults.get(CONF_PERSON_ENTITY_ID)): selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
+        vol.Optional(CONF_PERSON_ENTITY_ID, default=defaults.get(CONF_PERSON_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
     })
 
 
@@ -177,15 +175,8 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
-        vol.Optional(CONF_CALENDAR_ENTITY_ID, default=defaults.get(CONF_CALENDAR_ENTITY_ID)): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        vol.Optional(CONF_CALDAV_URL, default=defaults.get(CONF_CALDAV_URL)): selector.TextSelector(),
-        vol.Optional(CONF_CALDAV_USERNAME, default=defaults.get(CONF_CALDAV_USERNAME)): selector.TextSelector(),
-        vol.Optional(CONF_CALDAV_PASSWORD, default=defaults.get(CONF_CALDAV_PASSWORD)): selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-        ),
-        vol.Optional(CONF_CALENDAR_WAKE_PATTERN, default=defaults.get(CONF_CALENDAR_WAKE_PATTERN, DEFAULT_CALENDAR_WAKE_PATTERN)): selector.TextSelector(),
-        vol.Optional(CONF_CALENDAR_SKIP_TITLES, default=defaults.get(CONF_CALENDAR_SKIP_TITLES, DEFAULT_CALENDAR_SKIP_TITLES)): selector.TextSelector(),
+        vol.Optional(CONF_CALENDAR_ENTITY_ID, default=defaults.get(CONF_CALENDAR_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
+        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
         vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
@@ -197,7 +188,8 @@ def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 
 def _clean_calendar_input(user_input: dict[str, Any]) -> dict[str, Any]:
     """Drop empty optional calendar values before storing config entry data."""
-    return {key: value for key, value in user_input.items() if value not in (None, "")}
+    normalized = _normalize(user_input)
+    return {key: value for key, value in normalized.items() if value is not None}
 
 
 def _weekly_from_input(user_input: dict[str, Any]) -> dict[str, dict[str, Any]]:
