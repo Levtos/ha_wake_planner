@@ -18,6 +18,12 @@ from .rule_engine import parse_time
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _unfold(text: str) -> str:
+    """RFC 5545 §3.1: unfold lines (CRLF + whitespace → continuation)."""
+    return re.sub(r"\r?\n[ \t]", "", text)
+
+
 @dataclass(slots=True)
 class CalendarSourceStatus:
     """Current health of configured calendar sources."""
@@ -115,27 +121,164 @@ class CalendarSource:
             return response.read().decode(response.headers.get_content_charset() or "utf-8", errors="replace")
 
     def _parse_caldav_response(self, text: str) -> list[dict[str, Any]]:
+        """Parse a CalDAV REPORT response into a list of event dicts.
+
+        Handles RFC 5545 line folding, DTSTART VALUE=DATE/TZID forms,
+        RRULE expansion, and EXDATE exclusions.
+        """
         events: list[dict[str, Any]] = []
         try:
             root = ET.fromstring(text)
-            calendar_data = [node.text or "" for node in root.iter() if node.tag.endswith("calendar-data")]
+            calendar_data_blocks = [
+                node.text or "" for node in root.iter() if node.tag.endswith("calendar-data")
+            ]
         except ET.ParseError:
-            calendar_data = [text]
-        for ical in calendar_data:
-            summary = None
-            dtstart = None
-            all_day = False
-            for line in ical.splitlines():
-                if line.startswith("SUMMARY"):
-                    summary = line.split(":", 1)[-1].replace("\\,", ",")
-                if line.startswith("DTSTART"):
-                    key, value = line.split(":", 1)
-                    all_day = "VALUE=DATE" in key or len(value.strip()) == 8
-                    dtstart = value.strip()
-            if summary:
-                event_date = self._parse_ical_date(dtstart) if dtstart else None
-                events.append({"summary": summary, "start": event_date.isoformat() if event_date else None, "all_day": all_day})
+            calendar_data_blocks = [text]
+
+        for ical in calendar_data_blocks:
+            ical = _unfold(ical)
+            vevent_blocks = re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", ical, re.DOTALL)
+            for block in vevent_blocks:
+                event = self._parse_vevent_block(block)
+                if event:
+                    occurrences = event.pop("_rrule_occurrences", None)
+                    if occurrences:
+                        for occ_date in occurrences:
+                            occ_event = dict(event)
+                            occ_event["start"] = occ_date
+                            events.append(occ_event)
+                    else:
+                        events.append(event)
         return events
+
+    def _parse_vevent_block(self, block: str) -> dict[str, Any] | None:
+        """Parse a single VEVENT block into an event dict, expanding RRULE if present."""
+        props: dict[str, list[tuple[str, str]]] = {}
+
+        for line in block.splitlines():
+            if ":" not in line:
+                continue
+            key_part, _, value = line.partition(":")
+            name, _, params = key_part.partition(";")
+            props.setdefault(name.strip().upper(), []).append((params.strip(), value.strip()))
+
+        _, summary = (props.get("SUMMARY") or [("", "")])[-1]
+        summary = summary.replace("\\,", ",").replace("\\n", "\n").replace("\\;", ";")
+        if not summary:
+            return None
+
+        dtstart_params, dtstart_raw = (props.get("DTSTART") or [("", "")])[-1]
+        all_day = "VALUE=DATE" in dtstart_params or (len(dtstart_raw) == 8 and dtstart_raw.isdigit())
+
+        start_date = self._parse_ical_date(dtstart_raw, all_day)
+        if start_date is None:
+            return None
+
+        exdates: set[date] = set()
+        for ex_params, ex_value in props.get("EXDATE", []):
+            ex_all_day = "VALUE=DATE" in ex_params
+            for ex_raw in ex_value.split(","):
+                ex_raw = ex_raw.strip()
+                ex_d = self._parse_ical_date(
+                    ex_raw, ex_all_day or (len(ex_raw) == 8 and ex_raw.isdigit())
+                )
+                if ex_d:
+                    exdates.add(ex_d)
+
+        base_event = {"summary": summary, "start": start_date.isoformat(), "all_day": all_day}
+
+        _, rrule_value = (props.get("RRULE") or [("", "")])[-1]
+        if not rrule_value:
+            return base_event if start_date not in exdates else None
+
+        occurrences = self._expand_rrule(start_date, rrule_value, exdates)
+        if not occurrences:
+            return None
+
+        result = dict(base_event)
+        result["_rrule_occurrences"] = [occurrence.isoformat() for occurrence in occurrences]
+        return result
+
+    def _expand_rrule(
+        self, start: date, rrule_value: str, exdates: set[date], horizon_days: int = 60
+    ) -> list[date]:
+        """Expand a minimal RRULE string into concrete dates within a rolling horizon."""
+        today = date.today()
+        until = today + timedelta(days=horizon_days)
+
+        rules: dict[str, str] = {}
+        for part in rrule_value.split(";"):
+            if "=" in part:
+                key, _, value = part.partition("=")
+                rules[key.upper()] = value.upper()
+
+        freq = rules.get("FREQ", "")
+        try:
+            interval = max(1, int(rules.get("INTERVAL", "1")))
+        except ValueError:
+            interval = 1
+        byday = rules.get("BYDAY", "")
+
+        day_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+        byday_nums: set[int] = set()
+        if byday:
+            for part in byday.split(","):
+                abbr = re.sub(r"^[-+]?\d*", "", part.strip())
+                if abbr in day_map:
+                    byday_nums.add(day_map[abbr])
+
+        occurrences: list[date] = []
+        current = start
+        max_iterations = 3650
+        iterations = 0
+        while current <= until and iterations < max_iterations:
+            iterations += 1
+            if current >= today and current not in exdates:
+                if not byday_nums or current.weekday() in byday_nums:
+                    occurrences.append(current)
+
+            if freq == "DAILY":
+                current += timedelta(days=interval)
+            elif freq == "WEEKLY":
+                if byday_nums:
+                    current += timedelta(days=1)
+                else:
+                    current += timedelta(weeks=interval)
+            elif freq == "MONTHLY":
+                month = current.month - 1 + interval
+                year = current.year + month // 12
+                month = month % 12 + 1
+                day = min(current.day, [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+                current = current.replace(year=year, month=month, day=day)
+            elif freq == "YEARLY":
+                current = current.replace(year=current.year + interval)
+            else:
+                break
+
+        return occurrences
+
+    def _parse_ical_date(self, value: str | None, all_day: bool = False) -> date | None:
+        """Parse an iCal date/datetime string to a date object."""
+        if not value:
+            return None
+        value = value.strip().split(",")[0]
+
+        if len(value) == 8 and value.isdigit():
+            try:
+                return datetime.strptime(value, "%Y%m%d").date()
+            except ValueError:
+                return None
+
+        clean = re.sub(r"[Z+\-]\d{4}$", "", value)
+        clean = clean.rstrip("Z")
+        clean = clean[:15]
+
+        for date_format in ("%Y%m%dT%H%M%S", "%Y%m%dT%H%M", "%Y%m%d"):
+            try:
+                return datetime.strptime(clean, date_format).date()
+            except ValueError:
+                continue
+        return None
 
     def _parse_summary(self, summary: str, all_day: bool) -> CalendarDecision | None:
         normalized = summary.strip().lower()
@@ -165,9 +308,3 @@ class CalendarSource:
                     return fallback
         return fallback
 
-    def _parse_ical_date(self, value: str | None) -> date | None:
-        if not value:
-            return None
-        if len(value) == 8:
-            return datetime.strptime(value, "%Y%m%d").date()
-        return datetime.strptime(value[:15], "%Y%m%dT%H%M%S").date()
