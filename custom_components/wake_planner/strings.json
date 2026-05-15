@@ -42,8 +42,8 @@
       "sleep_target": {
         "title": "Sleep target and wake window",
         "data": {
-          "target_sleep_hours": "Target sleep duration (hours)",
-          "wake_window_minutes": "Wake window tolerance (± minutes)"
+          "target_sleep_hours": "Target sleep duration (h)",
+          "wake_window_minutes": "Wake window tolerance (min)"
         }
       },
       "more_people": {
@@ -101,8 +101,8 @@
       "sleep_target": {
         "title": "Edit sleep settings",
         "data": {
-          "target_sleep_hours": "Target sleep duration (hours)",
-          "wake_window_minutes": "Wake window tolerance (± minutes)"
+          "target_sleep_hours": "Target sleep duration (h)",
+          "wake_window_minutes": "Wake window tolerance (min)"
         }
       }
     }
