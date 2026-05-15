@@ -137,18 +137,26 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 def _normalize(data: dict) -> dict:
-    """Replace empty strings with None for optional entity fields."""
+    """Coerce empty strings to None for optional entity fields."""
     return {
         k: (None if k in _OPTIONAL_ENTITY_FIELDS and v == "" else v)
         for k, v in data.items()
     }
 
 
+def _optional_entity(key: str, defaults: dict) -> vol.Optional:
+    """Return vol.Optional with default only when a stored entity_id exists."""
+    val = defaults.get(key)
+    if val:
+        return vol.Optional(key, default=val)
+    return vol.Optional(key)
+
+
 def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
         vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): str,
-        vol.Optional(CONF_PERSON_ENTITY_ID, default=defaults.get(CONF_PERSON_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
+        _optional_entity(CONF_PERSON_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
     })
 
 
@@ -175,8 +183,8 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema({
-        vol.Optional(CONF_CALENDAR_ENTITY_ID, default=defaults.get(CONF_CALENDAR_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID, "")): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
+        _optional_entity(CONF_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
+        _optional_entity(CONF_HOLIDAY_CALENDAR_ENTITY_ID, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
         vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
