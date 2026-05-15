@@ -1,0 +1,95 @@
+{
+  "title": "Wake Planner",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a person",
+        "description": "Create a wake profile. The Home Assistant person entity is optional.",
+        "data": {
+          "name": "Name",
+          "person_entity_id": "Home Assistant person"
+        }
+      },
+      "weekly_profile": {
+        "title": "Weekly wake profile",
+        "description": "Configure active days and wake times.",
+        "data": {
+          "monday_active": "Monday active",
+          "monday_wake_time": "Monday wake time",
+          "tuesday_active": "Tuesday active",
+          "tuesday_wake_time": "Tuesday wake time",
+          "wednesday_active": "Wednesday active",
+          "wednesday_wake_time": "Wednesday wake time",
+          "thursday_active": "Thursday active",
+          "thursday_wake_time": "Thursday wake time",
+          "friday_active": "Friday active",
+          "friday_wake_time": "Friday wake time",
+          "saturday_active": "Saturday active",
+          "saturday_wake_time": "Saturday wake time",
+          "sunday_active": "Sunday active",
+          "sunday_wake_time": "Sunday wake time"
+        }
+      },
+      "sleep": {
+        "title": "Sleep target and wake window",
+        "data": {
+          "target_sleep_hours": "Target sleep duration (hours)",
+          "wake_window_minutes": "Wake window tolerance (± minutes)"
+        }
+      },
+      "more_people": {
+        "title": "More people?",
+        "data": {"add_another": "Add another person"}
+      },
+      "holidays": {
+        "title": "Holidays and workdays",
+        "data": {
+          "workday_entity_id": "Workday sensor",
+          "holiday_behavior": "When workday sensor is off"
+        }
+      },
+      "calendar": {
+        "title": "Calendar sources",
+        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'. All-day skip marker titles can skip a wake.",
+        "data": {
+          "calendar_entity_id": "Home Assistant calendar",
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password",
+          "calendar_wake_pattern": "Wake time regular expression",
+          "calendar_skip_titles": "All-day skip marker titles (comma separated)"
+        }
+      }
+    },
+    "error": {
+      "invalid_name": "Enter a valid name.",
+      "duplicate_person": "A person with this name already exists.",
+      "invalid_time": "Enter wake times as HH:MM."
+    },
+    "abort": {"already_configured": "Wake Planner is already configured."}
+  },
+  "options": {
+    "step": {
+      "person": {"title": "Edit person", "data": {"name": "Name", "person_entity_id": "Home Assistant person"}},
+      "weekly_profile": {"title": "Edit weekly profile"},
+      "sleep": {"title": "Edit sleep settings"},
+      "holidays": {"title": "Edit holidays"},
+      "calendar": {"title": "Edit calendars"}
+    }
+  },
+  "entity": {
+    "binary_sensor": {"wake_needed": {"name": "Wake needed"}},
+    "sensor": {
+      "wake_state": {"name": "Wake state", "state": {"scheduled": "Scheduled", "skipped": "Skipped", "overridden": "Overridden", "holiday": "Holiday", "inactive": "Inactive"}},
+      "next_wake": {"name": "Next wake"},
+      "sleep_duration_avg": {"name": "Average sleep duration"},
+      "suggested_bedtime": {"name": "Suggested bedtime"}
+    }
+  },
+  "services": {
+    "skip_next": {"name": "Skip next wake", "description": "Skip the next wake for a person.", "fields": {"person_id": {"name": "Person ID", "description": "Wake Planner person slug."}}},
+    "set_override": {"name": "Set override", "description": "Set a manual wake time override.", "fields": {"person_id": {"name": "Person ID"}, "wake_time": {"name": "Wake time"}, "until": {"name": "Until date"}}},
+    "clear_override": {"name": "Clear override", "description": "Clear manual override and skip state.", "fields": {"person_id": {"name": "Person ID"}}},
+    "log_sleep": {"name": "Log sleep", "description": "Add a manual sleep log entry.", "fields": {"person_id": {"name": "Person ID"}, "sleep_time": {"name": "Sleep time"}, "wake_time": {"name": "Wake time"}}}
+  }
+}
