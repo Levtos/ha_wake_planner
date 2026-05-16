@@ -72,19 +72,6 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._options[CONF_PERSONS] = self._persons
         return self.async_create_entry(title="", data=self._options)
 
-    async def async_step_caldav(self, user_input: dict[str, Any] | None = None):
-        """Edit optional direct CalDAV settings."""
-        self._ensure_initialized()
-        if user_input is not None:
-            self._options.update(_clean_caldav_input(user_input))
-            return self._async_finish_options()
-        return self.async_show_form(step_id="caldav", data_schema=_caldav_schema(self._options))
-
-    def _async_finish_options(self):
-        """Persist options while preserving the configured people."""
-        self._options[CONF_PERSONS] = self._persons
-        return self.async_create_entry(title="", data=self._options)
-
     async def async_step_person(self, user_input: dict[str, Any] | None = None):
         """Edit the current person basics."""
         if not self._persons:
