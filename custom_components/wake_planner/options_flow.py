@@ -30,7 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     """Edit Wake Planner settings without YAML."""
 
-    def __init__(self) -> None:
+    def __init__(self, entry: config_entries.ConfigEntry | None = None) -> None:
+        self._entry = entry
         self._options: dict[str, Any] = {}
         self._persons: list[dict[str, Any]] = []
         self._index = 0
@@ -41,7 +42,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         """Load the current config entry once Home Assistant attaches it."""
         if self._initialized:
             return
-        entry = self.config_entry
+        entry = self._entry or self.config_entry
         self._options = {**entry.data, **entry.options}
         self._persons = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
         self._index = 0
