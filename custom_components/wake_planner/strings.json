@@ -120,6 +120,14 @@
           "holiday_behavior": "Behaviour on weekends/holidays/vacation",
           "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
         }
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual holiday/vacation dates"
+        }
       }
     }
   },

@@ -120,6 +120,14 @@
           "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
           "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
         }
+      },
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Manuelle Daten als YYYY-MM-DD oder Bereiche wie YYYY-MM-DD..YYYY-MM-DD eintragen.",
+        "data": {
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Feiertags-/Urlaubsdaten"
+        }
       }
     }
   },
