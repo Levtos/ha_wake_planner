@@ -89,6 +89,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_person(self, user_input: dict[str, Any] | None = None):
         """Configure a person."""
+        self._log_step("person", user_input)
         errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input[CONF_PERSON_NAME].strip()
@@ -108,23 +109,25 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="person",
-            data_schema=_person_schema(),
+            data_schema=_person_schema(entity_ids=self._entity_ids("person")),
             errors=errors,
         )
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
         """Configure optional calendar sources."""
+        self._log_step("calendar", user_input)
         if user_input is not None:
             self._settings.update(_clean_calendar_input(user_input))
             self._calendar_configured = True
             return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="calendar",
-            data_schema=_calendar_schema(),
+            data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),
         )
 
     async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
         """Configure holiday and vacation handling."""
+        self._log_step("special_rules", user_input)
         if user_input is not None:
             self._settings.update(_clean_special_rules_input(user_input))
             self._special_rules_configured = True
@@ -134,6 +137,28 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_special_rules_schema(self._settings),
         )
 
+    def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
+        """Log config flow progress so UI 500s leave a backend breadcrumb."""
+        _LOGGER.warning(
+            "Wake Planner config flow step=%s submitted=%s persons=%s settings=%s",
+            step_id,
+            user_input is not None,
+            len(self._persons),
+            sorted(self._settings),
+        )
+
+    def _entity_ids(self, domain: str) -> list[str]:
+        """Return sorted entity ids for a selector domain."""
+        try:
+            return sorted(self.hass.states.async_entity_ids(domain))
+        except Exception:  # noqa: BLE001 - config flow must stay usable while debugging
+            _LOGGER.exception(
+                "Wake Planner config flow could not load %s entity ids; "
+                "continuing with an empty selector",
+                domain,
+            )
+            return []
+
     async def _async_create_config_entry(self):
         """Create the Wake Planner config entry."""
         data = {CONF_PERSONS: self._persons, **self._settings}
@@ -141,6 +166,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
         """Configure weekly profile."""
+        self._log_step("weekly_profile", user_input)
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
@@ -159,6 +185,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
         """Configure sleep target and wake window."""
+        self._log_step("sleep_target", user_input)
         if user_input is not None:
             self._person[CONF_TARGET_SLEEP_HOURS] = float(user_input[CONF_TARGET_SLEEP_HOURS])
             self._person[CONF_WAKE_WINDOW_MINUTES] = int(user_input[CONF_WAKE_WINDOW_MINUTES])
@@ -168,6 +195,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_more_people(self, user_input: dict[str, Any] | None = None):
         """Ask whether to add more people."""
+        self._log_step("more_people", user_input)
         if user_input is not None:
             if user_input["add_another"]:
                 self._person = {}
@@ -194,8 +222,40 @@ def _normalize(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    """Return the person form schema using stable primitive selectors."""
+def _entity_options(
+    entity_ids: list[str] | None,
+    current: str | None = None,
+) -> list[dict[str, str]]:
+    """Return select options for optional Home Assistant entity ids."""
+    options = [{"value": "", "label": "—"}]
+    entity_set = set(entity_ids or [])
+    if current:
+        entity_set.add(current)
+    options.extend(
+        {"value": entity_id, "label": entity_id}
+        for entity_id in sorted(entity_set)
+    )
+    return options
+
+
+def _entity_select(
+    entity_ids: list[str] | None,
+    current: str | None = None,
+) -> selector.SelectSelector:
+    """Return a clearable select selector populated from current HA entities."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=_entity_options(entity_ids, current),
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _person_schema(
+    defaults: dict[str, Any] | None = None,
+    entity_ids: list[str] | None = None,
+) -> vol.Schema:
+    """Return the person form schema."""
     defaults = defaults or {}
     name = defaults.get(CONF_PERSON_NAME)
     name_key = (
@@ -203,14 +263,14 @@ def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         if name
         else vol.Required(CONF_PERSON_NAME)
     )
+    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
     return vol.Schema({
         name_key: selector.TextSelector(),
-        vol.Optional(
-            CONF_PERSON_ENTITY_ID,
-            default=defaults.get(CONF_PERSON_ENTITY_ID) or "",
-        ): selector.TextSelector(),
+        vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity or ""): _entity_select(
+            entity_ids,
+            person_entity,
+        ),
     })
-
 
 def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or default_weekly_profile()
@@ -258,20 +318,24 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     })
 
 
-def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    """Return the calendar form schema using stable primitive selectors."""
+def _calendar_schema(
+    defaults: dict[str, Any] | None = None,
+    entity_ids: list[str] | None = None,
+) -> vol.Schema:
+    """Return the calendar form schema."""
     defaults = defaults or {}
+    calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
+    holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
     return vol.Schema({
         vol.Optional(
             CONF_CALENDAR_ENTITY_ID,
-            default=defaults.get(CONF_CALENDAR_ENTITY_ID) or "",
-        ): selector.TextSelector(),
+            default=calendar_entity or "",
+        ): _entity_select(entity_ids, calendar_entity),
         vol.Optional(
             CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-            default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID) or "",
-        ): selector.TextSelector(),
+            default=holiday_entity or "",
+        ): _entity_select(entity_ids, holiday_entity),
     })
-
 
 def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return holiday and vacation rule settings."""

@@ -14,8 +14,8 @@
         "title": "Calendar sources",
         "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
         "data": {
-          "calendar_entity_id": "Home Assistant calendar entity ID",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar entity ID"
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday/vacation calendar"
         }
       },
       "weekly_profile": {
@@ -75,8 +75,8 @@
       "calendar": {
         "title": "Edit calendars",
         "data": {
-          "calendar_entity_id": "Home Assistant calendar entity ID",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar entity ID"
+          "calendar_entity_id": "Home Assistant calendar",
+          "holiday_calendar_entity_id": "Holiday/vacation calendar"
         }
       },
       "person": {

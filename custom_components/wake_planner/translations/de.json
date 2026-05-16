@@ -14,8 +14,8 @@
         "title": "Kalenderquellen",
         "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
         "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender-Entity-ID",
-          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender-Entity-ID"
+          "calendar_entity_id": "Home-Assistant-Kalender",
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
         }
       },
       "weekly_profile": {
@@ -75,8 +75,8 @@
       "calendar": {
         "title": "Kalender bearbeiten",
         "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender-Entity-ID",
-          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender-Entity-ID"
+          "calendar_entity_id": "Home-Assistant-Kalender",
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
         }
       },
       "person": {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant import config_entries
@@ -23,12 +24,13 @@ from .config_flow import (
 from .const import CONF_PERSONS, CONF_WEEKLY_PROFILE
 from .util import default_weekly_profile
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     """Edit Wake Planner settings without YAML."""
 
-    def __init__(self, entry: config_entries.ConfigEntry | None = None) -> None:
-        self._entry = entry
+    def __init__(self) -> None:
         self._options: dict[str, Any] = {}
         self._persons: list[dict[str, Any]] = []
         self._index = 0
@@ -39,7 +41,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         """Load the current config entry once Home Assistant attaches it."""
         if self._initialized:
             return
-        entry = self._entry or self.config_entry
+        entry = self.config_entry
         self._options = {**entry.data, **entry.options}
         self._persons = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
         self._index = 0
@@ -54,6 +56,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
         """Edit calendar settings and holiday behavior."""
         self._ensure_initialized()
+        self._log_step("calendar", user_input)
         if user_input is not None:
             for key in CALENDAR_OPTION_KEYS | CALDAV_OPTION_KEYS:
                 self._options.pop(key, None)
@@ -61,8 +64,30 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_person()
         return self.async_show_form(
             step_id="calendar",
-            data_schema=_calendar_schema(self._options),
+            data_schema=_calendar_schema(self._options, self._entity_ids("calendar")),
         )
+
+    def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
+        """Log options flow progress so UI 500s leave a backend breadcrumb."""
+        _LOGGER.warning(
+            "Wake Planner options flow step=%s submitted=%s persons=%s options=%s",
+            step_id,
+            user_input is not None,
+            len(self._persons),
+            sorted(self._options),
+        )
+
+    def _entity_ids(self, domain: str) -> list[str]:
+        """Return sorted entity ids for a selector domain."""
+        try:
+            return sorted(self.hass.states.async_entity_ids(domain))
+        except Exception:  # noqa: BLE001 - options flow must stay usable while debugging
+            _LOGGER.exception(
+                "Wake Planner options flow could not load %s entity ids; "
+                "continuing with an empty selector",
+                domain,
+            )
+            return []
 
     def _async_finish_options(self):
         """Persist options while preserving the configured people."""
@@ -71,6 +96,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_person(self, user_input: dict[str, Any] | None = None):
         """Edit the current person basics."""
+        self._log_step("person", user_input)
         if not self._persons:
             self._persons = [{"name": "Person", "slug": "person"}]
         person = self._persons[self._index]
@@ -79,11 +105,12 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="person",
-            data_schema=_person_schema(person),
+            data_schema=_person_schema(person, self._entity_ids("person")),
         )
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
         """Edit weekly profile."""
+        self._log_step("weekly_profile", user_input)
         errors: dict[str, str] = {}
         person = self._persons[self._index]
         if user_input is not None:
@@ -105,6 +132,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
         """Edit holiday and vacation handling."""
+        self._log_step("special_rules", user_input)
         if user_input is not None:
             for key in SPECIAL_RULE_OPTION_KEYS:
                 self._options.pop(key, None)
@@ -118,6 +146,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
         """Edit sleep settings."""
+        self._log_step("sleep_target", user_input)
         if user_input is not None:
             from .const import CONF_TARGET_SLEEP_HOURS, CONF_WAKE_WINDOW_MINUTES
             self._persons[self._index].update({
