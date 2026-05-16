@@ -7,7 +7,7 @@
         "description": "Create a wake profile. The Home Assistant person entity is optional.",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home Assistant person"
+          "person_entity_id": "Home Assistant person entity ID"
         }
       },
       "calendar": {
@@ -83,7 +83,7 @@
         "title": "Edit person",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home Assistant person"
+          "person_entity_id": "Home Assistant person entity ID"
         }
       },
       "weekly_profile": {

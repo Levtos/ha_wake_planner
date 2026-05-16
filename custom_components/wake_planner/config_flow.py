@@ -13,6 +13,9 @@ from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
 from .const import (
+    CONF_CALDAV_PASSWORD,
+    CONF_CALDAV_URL,
+    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -46,6 +49,8 @@ DAY_FIELDS = {
     "saturday": "sat",
     "sunday": "sun",
 }
+CONF_CONFIGURE_CALDAV = "configure_caldav"
+
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
