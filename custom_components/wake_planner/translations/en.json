@@ -12,11 +12,12 @@
       },
       "calendar": {
         "title": "Calendar sources",
-        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'.",
+        "description": "Calendars are optional. Use calendars already added in Home Assistant. Enable CalDAV only if the calendar is not available in Home Assistant.",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "holiday_behavior": "Behaviour on weekends/holidays",
+          "configure_caldav": "Configure direct CalDAV"
         }
       },
       "weekly_profile": {
@@ -51,6 +52,15 @@
         "data": {
           "add_another": "Add another person"
         }
+      },
+      "caldav": {
+        "title": "Direct CalDAV (optional)",
+        "description": "Only configure direct CalDAV if the calendar is not already available as a Home Assistant calendar entity.",
+        "data": {
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password"
+        }
       }
     },
     "error": {
@@ -69,7 +79,8 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "holiday_behavior": "Behaviour on weekends/holidays",
+          "configure_caldav": "Configure direct CalDAV"
         }
       },
       "person": {
@@ -103,6 +114,15 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
+        }
+      },
+      "caldav": {
+        "title": "Direct CalDAV (optional)",
+        "description": "Only configure direct CalDAV if the calendar is not already available as a Home Assistant calendar entity.",
+        "data": {
+          "caldav_url": "CalDAV URL",
+          "caldav_username": "CalDAV username",
+          "caldav_password": "CalDAV password"
         }
       }
     }

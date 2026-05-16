@@ -12,11 +12,12 @@
       },
       "calendar": {
         "title": "Kalenderquellen",
-        "description": "Kalender sind optional. Termintitel können eine Weckzeit wie 'wake: 06:30' enthalten.",
+        "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Aktiviere CalDAV nur, wenn der Kalender nicht als Home-Assistant-Kalender verfügbar ist.",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen"
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen",
+          "configure_caldav": "Direktes CalDAV konfigurieren"
         }
       },
       "weekly_profile": {
@@ -51,6 +52,15 @@
         "data": {
           "add_another": "Weitere Person hinzufügen"
         }
+      },
+      "caldav": {
+        "title": "Direktes CalDAV (optional)",
+        "description": "Direktes CalDAV nur konfigurieren, wenn der Kalender nicht bereits als Home-Assistant-Kalender-Entität verfügbar ist.",
+        "data": {
+          "caldav_url": "CalDAV-URL",
+          "caldav_username": "CalDAV-Benutzername",
+          "caldav_password": "CalDAV-Passwort"
+        }
       }
     },
     "error": {
@@ -69,7 +79,8 @@
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen"
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen",
+          "configure_caldav": "Direktes CalDAV konfigurieren"
         }
       },
       "person": {
@@ -103,6 +114,15 @@
         "data": {
           "target_sleep_hours": "Ziel-Schlafdauer (h)",
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
+        }
+      },
+      "caldav": {
+        "title": "Direktes CalDAV (optional)",
+        "description": "Direktes CalDAV nur konfigurieren, wenn der Kalender nicht bereits als Home-Assistant-Kalender-Entität verfügbar ist.",
+        "data": {
+          "caldav_url": "CalDAV-URL",
+          "caldav_username": "CalDAV-Benutzername",
+          "caldav_password": "CalDAV-Passwort"
         }
       }
     }
