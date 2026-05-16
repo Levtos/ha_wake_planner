@@ -7,16 +7,15 @@
         "description": "Create a wake profile. The Home Assistant person entity is optional.",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home Assistant person"
+          "person_entity_id": "Home Assistant person entity ID"
         }
       },
       "calendar": {
         "title": "Calendar sources",
-        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'.",
+        "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
         "data": {
-          "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "calendar_entity_id": "Home Assistant calendar entity ID",
+          "holiday_calendar_entity_id": "Holiday/vacation calendar entity ID"
         }
       },
       "weekly_profile": {
@@ -44,12 +43,21 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
-        }
+        },
+        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
       },
       "more_people": {
         "title": "More people?",
         "data": {
           "add_another": "Add another person"
+        }
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
         }
       }
     },
@@ -67,16 +75,15 @@
       "calendar": {
         "title": "Edit calendars",
         "data": {
-          "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "calendar_entity_id": "Home Assistant calendar entity ID",
+          "holiday_calendar_entity_id": "Holiday/vacation calendar entity ID"
         }
       },
       "person": {
         "title": "Edit person",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home Assistant person"
+          "person_entity_id": "Home Assistant person entity ID"
         }
       },
       "weekly_profile": {
@@ -103,6 +110,15 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
+        },
+        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
         }
       }
     }
