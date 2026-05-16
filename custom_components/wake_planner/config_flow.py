@@ -13,6 +13,9 @@ from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
 from .const import (
+    CONF_CALDAV_PASSWORD,
+    CONF_CALDAV_URL,
+    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -46,6 +49,8 @@ DAY_FIELDS = {
     "saturday": "sat",
     "sunday": "sun",
 }
+CONF_CONFIGURE_CALDAV = "configure_caldav"
+
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -54,6 +59,12 @@ SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
     CONF_MANUAL_HOLIDAY_DATES,
 }
+CALDAV_OPTION_KEYS = {
+    CONF_CALDAV_URL,
+    CONF_CALDAV_USERNAME,
+    CONF_CALDAV_PASSWORD,
+}
+
 
 
 class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -132,6 +143,20 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _entity_ids(self, domain: str) -> list[str]:
         """Return sorted entity ids for a selector domain."""
         return sorted(self.hass.states.async_entity_ids(domain))
+
+    async def _async_create_config_entry(self):
+        """Create the Wake Planner config entry."""
+        data = {CONF_PERSONS: self._persons, **self._settings}
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title="Wake Planner", data=data)
+
+    async def async_step_caldav(self, user_input: dict[str, Any] | None = None):
+        """Configure optional direct CalDAV access."""
+        if user_input is not None:
+            self._settings.update(_clean_caldav_input(user_input))
+            return await self._async_create_config_entry()
+        return self.async_show_form(step_id="caldav", data_schema=_caldav_schema(self._settings))
 
     async def _async_create_config_entry(self):
         """Create the Wake Planner config entry."""
@@ -332,6 +357,29 @@ def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             selector.TextSelectorConfig(multiline=True)
         ),
     })
+
+
+def _caldav_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the optional direct CalDAV settings schema."""
+    defaults = defaults or {}
+    return vol.Schema({
+        vol.Required(CONF_CALDAV_URL, default=defaults.get(CONF_CALDAV_URL, "")): (
+            selector.TextSelector()
+        ),
+        vol.Optional(CONF_CALDAV_USERNAME, default=defaults.get(CONF_CALDAV_USERNAME, "")): (
+            selector.TextSelector()
+        ),
+        vol.Optional(CONF_CALDAV_PASSWORD, default=defaults.get(CONF_CALDAV_PASSWORD, "")): (
+            selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            )
+        ),
+    })
+
+
+def _has_caldav_config(defaults: dict[str, Any]) -> bool:
+    """Return true when existing direct CalDAV settings are present."""
+    return any(defaults.get(key) for key in CALDAV_OPTION_KEYS)
 
 
 def _clean_calendar_input(user_input: dict[str, Any]) -> dict[str, Any]:
