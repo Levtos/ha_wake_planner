@@ -28,6 +28,12 @@ CONF_CALDAV_PASSWORD = "caldav_password"
 CONF_CALENDAR_WAKE_PATTERN = "calendar_wake_pattern"
 CONF_CALENDAR_SKIP_TITLES = "calendar_skip_titles"
 
+CONF_SHIFT_CYCLE = "shift_cycle"
+CONF_SHIFT_ANCHOR_DATE = "anchor_date"
+CONF_SHIFT_SLOTS = "slots"
+CONF_SHIFT_SLOT_NAME = "slot_name"
+CONF_SHIFT_SLOT_DAYS = "duration_days"
+
 DEFAULT_WAKE_TIME = "07:00"
 DEFAULT_TARGET_SLEEP_HOURS = 7.5
 DEFAULT_WAKE_WINDOW_MINUTES = 5
@@ -76,6 +82,35 @@ class WeeklyDayProfile:
 
 
 @dataclass(slots=True)
+class ShiftSlot:
+    """One profile in a shift cycle."""
+
+    name: str
+    duration_days: int
+    weekly_profile: dict[str, WeeklyDayProfile]
+
+
+@dataclass
+class ShiftCycle:
+    """Rotating shift schedule anchored to a reference date."""
+
+    anchor_date: date
+    slots: list[ShiftSlot]
+
+    def active_slot(self, day: date) -> ShiftSlot:
+        total = sum(s.duration_days for s in self.slots)
+        offset = (day - self.anchor_date).days % total
+        if offset < 0:
+            offset += total
+        cumulative = 0
+        for slot in self.slots:
+            cumulative += slot.duration_days
+            if offset < cumulative:
+                return slot
+        return self.slots[-1]
+
+
+@dataclass(slots=True)
 class PersonConfig:
     """Configured wake planner person."""
 
@@ -85,6 +120,7 @@ class PersonConfig:
     weekly_profile: dict[str, WeeklyDayProfile]
     target_sleep_hours: float = DEFAULT_TARGET_SLEEP_HOURS
     wake_window_minutes: int = DEFAULT_WAKE_WINDOW_MINUTES
+    shift_cycle: ShiftCycle | None = None
 
 
 @dataclass(slots=True)

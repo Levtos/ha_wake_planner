@@ -152,13 +152,24 @@ class RuleEngine:
             if self._holiday_behavior == HOLIDAY_WEEKEND_PROFILE and profile_day not in WEEKEND_DAYS:
                 profile_day = "saturday"
 
-        profile = person.weekly_profile.get(profile_day)
+        if person.shift_cycle:
+            slot = person.shift_cycle.active_slot(day)
+            profile = slot.weekly_profile.get(profile_day)
+            decided_by = "shift_cycle"
+            inactive_reason = f"Shift '{slot.name}', {profile_day.title()} inactive"
+            active_reason = f"Shift '{slot.name}', {profile_day.title()}: {profile.wake_time.strftime('%H:%M') if profile else ''}"
+        else:
+            profile = person.weekly_profile.get(profile_day)
+            decided_by = "weekly_profile"
+            inactive_reason = f"{profile_day.title()} profile inactive"
+            active_reason = f"{profile_day.title()} profile: {profile.wake_time.strftime('%H:%M') if profile else ''}"
+
         if profile is None or not profile.active:
             return WakeDecision(
                 wake_time=None,
                 state=WakeState.INACTIVE,
-                decided_by="weekly_profile",
-                reason=f"{profile_day.title()} profile inactive",
+                decided_by=decided_by,
+                reason=inactive_reason,
                 profile_day=profile_day,
                 holiday_name=holiday_name,
                 skip_active=runtime.skip_next,
@@ -170,8 +181,8 @@ class RuleEngine:
             profile.wake_time,
             now.tzinfo,
             WakeState.SCHEDULED,
-            "weekly_profile",
-            f"{profile_day.title()} profile: {profile.wake_time.strftime('%H:%M')}",
+            decided_by,
+            active_reason,
             profile_day,
             holiday_name=holiday_name,
             skip_active=runtime.skip_next,

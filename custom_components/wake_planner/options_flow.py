@@ -9,17 +9,29 @@ from homeassistant import config_entries
 
 from .config_flow import (
     CALENDAR_OPTION_KEYS,
+    CONF_ENABLE_SHIFT_CYCLE,
+    CONF_NUM_SHIFT_SLOTS,
     SPECIAL_RULE_OPTION_KEYS,
     _calendar_schema,
     _clean_calendar_input,
     _clean_special_rules_input,
     _person_schema,
+    _shift_cycle_setup_schema,
+    _shift_slot_schema,
     _sleep_schema,
     _special_rules_schema,
     _weekly_from_input,
     _weekly_schema,
 )
-from .const import CONF_PERSONS, CONF_WEEKLY_PROFILE
+from .const import (
+    CONF_PERSONS,
+    CONF_SHIFT_ANCHOR_DATE,
+    CONF_SHIFT_CYCLE,
+    CONF_SHIFT_SLOT_DAYS,
+    CONF_SHIFT_SLOT_NAME,
+    CONF_SHIFT_SLOTS,
+    CONF_WEEKLY_PROFILE,
+)
 from .util import default_weekly_profile
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +47,10 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._index = 0
         self._initialized = False
         self._special_rules_configured = False
+        self._shift_slots: list[dict] = []
+        self._shift_slot_index: int = 0
+        self._num_shift_slots: int = 0
+        self._shift_anchor_date: str = ""
 
     def _ensure_initialized(self) -> None:
         """Load the current config entry once Home Assistant attaches it."""
@@ -153,11 +169,77 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
                 CONF_TARGET_SLEEP_HOURS: float(user_input[CONF_TARGET_SLEEP_HOURS]),
                 CONF_WAKE_WINDOW_MINUTES: int(user_input[CONF_WAKE_WINDOW_MINUTES]),
             })
+            self._shift_slots = []
+            self._shift_slot_index = 0
+            return await self.async_step_shift_cycle_setup()
+        return self.async_show_form(
+            step_id="sleep_target",
+            data_schema=_sleep_schema(self._persons[self._index]),
+        )
+
+    async def async_step_shift_cycle_setup(self, user_input: dict[str, Any] | None = None):
+        """Ask whether this person works shifts."""
+        self._log_step("shift_cycle_setup", user_input)
+        if user_input is not None:
+            if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
+                self._num_shift_slots = int(user_input[CONF_NUM_SHIFT_SLOTS])
+                self._shift_anchor_date = str(user_input[CONF_SHIFT_ANCHOR_DATE]).strip()
+                self._shift_slots = []
+                self._shift_slot_index = 0
+                return await self.async_step_shift_slot()
+            self._persons[self._index].pop(CONF_SHIFT_CYCLE, None)
             self._index += 1
             if self._index < len(self._persons):
                 return await self.async_step_person()
             return self._async_finish_options()
+        current_cycle = self._persons[self._index].get(CONF_SHIFT_CYCLE) or {}
         return self.async_show_form(
-            step_id="sleep_target",
-            data_schema=_sleep_schema(self._persons[self._index]),
+            step_id="shift_cycle_setup",
+            data_schema=_shift_cycle_setup_schema(current_cycle),
+        )
+
+    async def async_step_shift_slot(self, user_input: dict[str, Any] | None = None):
+        """Configure one shift slot name and duration."""
+        self._log_step("shift_slot", user_input)
+        if user_input is not None:
+            self._shift_slots.append({
+                CONF_SHIFT_SLOT_NAME: str(user_input[CONF_SHIFT_SLOT_NAME]).strip() or f"Profile {self._shift_slot_index + 1}",
+                CONF_SHIFT_SLOT_DAYS: int(user_input[CONF_SHIFT_SLOT_DAYS]),
+            })
+            return await self.async_step_shift_slot_profile()
+        return self.async_show_form(
+            step_id="shift_slot",
+            data_schema=_shift_slot_schema(),
+            description_placeholders={
+                "slot_num": str(self._shift_slot_index + 1),
+                "total": str(self._num_shift_slots),
+            },
+        )
+
+    async def async_step_shift_slot_profile(self, user_input: dict[str, Any] | None = None):
+        """Configure weekly schedule for the current shift slot."""
+        self._log_step("shift_slot_profile", user_input)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                self._shift_slots[-1][CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
+            except ValueError:
+                errors["base"] = "invalid_time"
+            else:
+                self._shift_slot_index += 1
+                if self._shift_slot_index < self._num_shift_slots:
+                    return await self.async_step_shift_slot()
+                self._persons[self._index][CONF_SHIFT_CYCLE] = {
+                    CONF_SHIFT_ANCHOR_DATE: self._shift_anchor_date,
+                    CONF_SHIFT_SLOTS: self._shift_slots,
+                }
+                self._index += 1
+                if self._index < len(self._persons):
+                    return await self.async_step_person()
+                return self._async_finish_options()
+        return self.async_show_form(
+            step_id="shift_slot_profile",
+            data_schema=_weekly_schema(),
+            description_placeholders={"slot_name": self._shift_slots[-1].get(CONF_SHIFT_SLOT_NAME, "")},
+            errors=errors,
         )
