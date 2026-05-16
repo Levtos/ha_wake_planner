@@ -61,12 +61,8 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_person()
         return self.async_show_form(
             step_id="calendar",
-            data_schema=_calendar_schema(self._options, self._entity_ids("calendar")),
+            data_schema=_calendar_schema(self._options),
         )
-
-    def _entity_ids(self, domain: str) -> list[str]:
-        """Return sorted entity ids for a selector domain."""
-        return sorted(self.hass.states.async_entity_ids(domain))
 
     def _async_finish_options(self):
         """Persist options while preserving the configured people."""
@@ -83,7 +79,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="person",
-            data_schema=_person_schema(person, self._entity_ids("person")),
+            data_schema=_person_schema(person),
         )
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):

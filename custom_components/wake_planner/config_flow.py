@@ -108,7 +108,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="person",
-            data_schema=_person_schema(entity_ids=self._entity_ids("person")),
+            data_schema=_person_schema(),
             errors=errors,
         )
 
@@ -120,7 +120,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_weekly_profile()
         return self.async_show_form(
             step_id="calendar",
-            data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),
+            data_schema=_calendar_schema(),
         )
 
     async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
@@ -133,10 +133,6 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="special_rules",
             data_schema=_special_rules_schema(self._settings),
         )
-
-    def _entity_ids(self, domain: str) -> list[str]:
-        """Return sorted entity ids for a selector domain."""
-        return sorted(self.hass.states.async_entity_ids(domain))
 
     async def _async_create_config_entry(self):
         """Create the Wake Planner config entry."""
@@ -198,39 +194,8 @@ def _normalize(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _entity_options(
-    entity_ids: list[str] | None,
-    current: str | None = None,
-) -> list[dict[str, str]]:
-    """Return select options for optional Home Assistant entity ids."""
-    options = [{"value": "", "label": "—"}]
-    entity_set = set(entity_ids or [])
-    if current:
-        entity_set.add(current)
-    options.extend(
-        {"value": entity_id, "label": entity_id}
-        for entity_id in sorted(entity_set)
-    )
-    return options
-
-
-def _entity_select(
-    entity_ids: list[str] | None,
-    current: str | None = None,
-) -> selector.SelectSelector:
-    """Return a clearable select selector populated from current HA entities."""
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=_entity_options(entity_ids, current),
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
-
-
-def _person_schema(
-    defaults: dict[str, Any] | None = None,
-    entity_ids: list[str] | None = None,
-) -> vol.Schema:
+def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the person form schema using stable primitive selectors."""
     defaults = defaults or {}
     name = defaults.get(CONF_PERSON_NAME)
     name_key = (
@@ -238,13 +203,12 @@ def _person_schema(
         if name
         else vol.Required(CONF_PERSON_NAME)
     )
-    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
     return vol.Schema({
         name_key: selector.TextSelector(),
-        vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity or ""): _entity_select(
-            entity_ids,
-            person_entity,
-        ),
+        vol.Optional(
+            CONF_PERSON_ENTITY_ID,
+            default=defaults.get(CONF_PERSON_ENTITY_ID) or "",
+        ): selector.TextSelector(),
     })
 
 
@@ -294,22 +258,18 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     })
 
 
-def _calendar_schema(
-    defaults: dict[str, Any] | None = None,
-    entity_ids: list[str] | None = None,
-) -> vol.Schema:
+def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the calendar form schema using stable primitive selectors."""
     defaults = defaults or {}
-    calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
-    holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
     return vol.Schema({
         vol.Optional(
             CONF_CALENDAR_ENTITY_ID,
-            default=calendar_entity or "",
-        ): _entity_select(entity_ids, calendar_entity),
+            default=defaults.get(CONF_CALENDAR_ENTITY_ID) or "",
+        ): selector.TextSelector(),
         vol.Optional(
             CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-            default=holiday_entity or "",
-        ): _entity_select(entity_ids, holiday_entity),
+            default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID) or "",
+        ): selector.TextSelector(),
     })
 
 

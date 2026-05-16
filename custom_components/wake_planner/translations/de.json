@@ -7,15 +7,15 @@
         "description": "Erstelle ein Weckprofil. Die Home-Assistant-Person ist optional.",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home-Assistant-Person"
+          "person_entity_id": "Home-Assistant-Person-Entity-ID"
         }
       },
       "calendar": {
         "title": "Kalenderquellen",
         "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
         "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender"
+          "calendar_entity_id": "Home-Assistant-Kalender-Entity-ID",
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender-Entity-ID"
         }
       },
       "weekly_profile": {
@@ -75,15 +75,15 @@
       "calendar": {
         "title": "Kalender bearbeiten",
         "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender"
+          "calendar_entity_id": "Home-Assistant-Kalender-Entity-ID",
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender-Entity-ID"
         }
       },
       "person": {
         "title": "Person bearbeiten",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home-Assistant-Person"
+          "person_entity_id": "Home-Assistant-Person-Entity-ID"
         }
       },
       "weekly_profile": {
@@ -119,14 +119,6 @@
         "data": {
           "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
           "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
-        }
-      },
-      "special_rules": {
-        "title": "Sonderregeln",
-        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Manuelle Daten als YYYY-MM-DD oder Bereiche wie YYYY-MM-DD..YYYY-MM-DD eintragen.",
-        "data": {
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
-          "manual_holiday_dates": "Manuelle Feiertags-/Urlaubsdaten"
         }
       }
     }
