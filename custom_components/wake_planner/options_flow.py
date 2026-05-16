@@ -7,8 +7,12 @@ from typing import Any
 from homeassistant import config_entries
 
 from .config_flow import (
+    CALDAV_OPTION_KEYS,
     CALENDAR_OPTION_KEYS,
+    CONF_CONFIGURE_CALDAV,
+    _caldav_schema,
     _calendar_schema,
+    _clean_caldav_input,
     _clean_calendar_input,
     _person_schema,
     _sleep_schema,
@@ -47,11 +51,26 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         """Edit calendar settings and holiday behavior."""
         self._ensure_initialized()
         if user_input is not None:
-            for key in CALENDAR_OPTION_KEYS:
+            for key in CALENDAR_OPTION_KEYS | CALDAV_OPTION_KEYS:
                 self._options.pop(key, None)
             self._options.update(_clean_calendar_input(user_input))
-            return await self.async_step_person()
+            if user_input.get(CONF_CONFIGURE_CALDAV):
+                return await self.async_step_caldav()
+            return self._async_finish_options()
         return self.async_show_form(step_id="calendar", data_schema=_calendar_schema(self._options))
+
+    async def async_step_caldav(self, user_input: dict[str, Any] | None = None):
+        """Edit optional direct CalDAV settings."""
+        self._ensure_initialized()
+        if user_input is not None:
+            self._options.update(_clean_caldav_input(user_input))
+            return self._async_finish_options()
+        return self.async_show_form(step_id="caldav", data_schema=_caldav_schema(self._options))
+
+    def _async_finish_options(self):
+        """Persist options while preserving the configured people."""
+        self._options[CONF_PERSONS] = self._persons
+        return self.async_create_entry(title="", data=self._options)
 
     async def async_step_person(self, user_input: dict[str, Any] | None = None):
         """Edit the current person basics."""
@@ -92,6 +111,8 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             self._index += 1
             if self._index < len(self._persons):
                 return await self.async_step_person()
-            self._options[CONF_PERSONS] = self._persons
-            return self.async_create_entry(title="", data=self._options)
-        return self.async_show_form(step_id="sleep_target", data_schema=_sleep_schema(self._persons[self._index]))
+            return self._async_finish_options()
+        return self.async_show_form(
+            step_id="sleep_target",
+            data_schema=_sleep_schema(self._persons[self._index]),
+        )
