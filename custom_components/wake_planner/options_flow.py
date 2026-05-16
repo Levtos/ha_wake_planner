@@ -8,11 +8,9 @@ from typing import Any
 from homeassistant import config_entries
 
 from .config_flow import (
-    CALDAV_OPTION_KEYS,
     CALENDAR_OPTION_KEYS,
     SPECIAL_RULE_OPTION_KEYS,
     _calendar_schema,
-    _clean_caldav_input,
     _clean_calendar_input,
     _clean_special_rules_input,
     _person_schema,
@@ -59,7 +57,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._ensure_initialized()
         self._log_step("calendar", user_input)
         if user_input is not None:
-            for key in CALENDAR_OPTION_KEYS | CALDAV_OPTION_KEYS:
+            for key in CALENDAR_OPTION_KEYS:
                 self._options.pop(key, None)
             self._options.update(_clean_calendar_input(user_input))
             return await self.async_step_person()

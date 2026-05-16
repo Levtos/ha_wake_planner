@@ -54,7 +54,6 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         self.entry = entry
         self.store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
         self.runtime_states: dict[str, RuntimePersonState] = {}
-        self.sleep_log: dict[str, list[dict[str, str]]] = {}
         self.persons: list[PersonConfig] = persons_from_entry(entry)
         self.calendar_source = self._build_calendar_source()
         self.last_update_iso: str | None = None
@@ -86,10 +85,13 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.store.async_save(payload)
 
     async def _async_update_data(self) -> dict[str, WakeDecision]:
-        self.persons = persons_from_entry(self.entry)
+        current_options = {**self.entry.data, **self.entry.options}
+        if current_options != getattr(self, "_last_options", None):
+            self.persons = persons_from_entry(self.entry)
+            self.calendar_source = self._build_calendar_source()
+            self._last_options = current_options
         for person in self.persons:
             self.runtime_states.setdefault(person.slug, RuntimePersonState())
-        self.calendar_source = self._build_calendar_source()
         now = dt_util.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         calendar_decisions = await self.calendar_source.async_get_decisions(
