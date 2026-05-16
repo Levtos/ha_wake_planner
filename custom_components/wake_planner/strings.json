@@ -46,6 +46,43 @@
         },
         "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
       },
+      "shift_cycle_setup": {
+        "title": "Shift cycle",
+        "description": "Enable a rotating shift schedule. Anchor date is the first calendar day of profile 1 (YYYY-MM-DD).",
+        "data": {
+          "enable_shift_cycle": "Enable shift cycle",
+          "num_slots": "Number of shift profiles",
+          "anchor_date": "Anchor date for profile 1 (YYYY-MM-DD)"
+        }
+      },
+      "shift_slot": {
+        "title": "Shift profile {slot_num} of {total}",
+        "description": "Name this profile and set how many consecutive days it lasts.",
+        "data": {
+          "slot_name": "Profile name",
+          "duration_days": "Duration (days)"
+        }
+      },
+      "shift_slot_profile": {
+        "title": "Weekly schedule for \"{slot_name}\"",
+        "description": "Active days and wake times during this shift profile.",
+        "data": {
+          "mon_active": "Mon active",
+          "mon_wake_time": "Mon – Wake time",
+          "tue_active": "Tue active",
+          "tue_wake_time": "Tue – Wake time",
+          "wed_active": "Wed active",
+          "wed_wake_time": "Wed – Wake time",
+          "thu_active": "Thu active",
+          "thu_wake_time": "Thu – Wake time",
+          "fri_active": "Fri active",
+          "fri_wake_time": "Fri – Wake time",
+          "sat_active": "Sat active",
+          "sat_wake_time": "Sat – Wake time",
+          "sun_active": "Sun active",
+          "sun_wake_time": "Sun – Wake time"
+        }
+      },
       "more_people": {
         "title": "More people?",
         "data": {
@@ -112,6 +149,43 @@
           "wake_window_minutes": "Wake window tolerance (min)"
         },
         "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
+      },
+      "shift_cycle_setup": {
+        "title": "Shift cycle",
+        "description": "Enable a rotating shift schedule. Anchor date is the first calendar day of profile 1 (YYYY-MM-DD).",
+        "data": {
+          "enable_shift_cycle": "Enable shift cycle",
+          "num_slots": "Number of shift profiles",
+          "anchor_date": "Anchor date for profile 1 (YYYY-MM-DD)"
+        }
+      },
+      "shift_slot": {
+        "title": "Shift profile {slot_num} of {total}",
+        "description": "Name this profile and set how many consecutive days it lasts.",
+        "data": {
+          "slot_name": "Profile name",
+          "duration_days": "Duration (days)"
+        }
+      },
+      "shift_slot_profile": {
+        "title": "Weekly schedule for \"{slot_name}\"",
+        "description": "Active days and wake times during this shift profile.",
+        "data": {
+          "mon_active": "Mon active",
+          "mon_wake_time": "Mon – Wake time",
+          "tue_active": "Tue active",
+          "tue_wake_time": "Tue – Wake time",
+          "wed_active": "Wed active",
+          "wed_wake_time": "Wed – Wake time",
+          "thu_active": "Thu active",
+          "thu_wake_time": "Thu – Wake time",
+          "fri_active": "Fri active",
+          "fri_wake_time": "Fri – Wake time",
+          "sat_active": "Sat active",
+          "sat_wake_time": "Sat – Wake time",
+          "sun_active": "Sun active",
+          "sun_wake_time": "Sun – Wake time"
+        }
       },
       "special_rules": {
         "title": "Special rules",

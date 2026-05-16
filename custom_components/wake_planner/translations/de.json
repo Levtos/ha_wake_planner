@@ -46,6 +46,43 @@
         },
         "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
       },
+      "shift_cycle_setup": {
+        "title": "Schichtsystem",
+        "description": "Aktiviere einen rotierenden Schichtplan. Das Ankerdatum ist der erste Kalendertag, an dem Profil 1 gilt (JJJJ-MM-TT). Anzahl der Profile und Ankerdatum werden nur verwendet, wenn das Schichtsystem aktiviert ist.",
+        "data": {
+          "enable_shift_cycle": "Schichtsystem aktivieren",
+          "num_slots": "Anzahl der Schichtprofile",
+          "anchor_date": "Ankerdatum für Profil 1 (JJJJ-MM-TT)"
+        }
+      },
+      "shift_slot": {
+        "title": "Schichtprofil {slot_num} von {total}",
+        "description": "Benenne dieses Profil und lege fest, wie viele aufeinanderfolgende Tage es gilt, bevor das nächste Profil aktiv wird.",
+        "data": {
+          "slot_name": "Profilname",
+          "duration_days": "Dauer (Tage)"
+        }
+      },
+      "shift_slot_profile": {
+        "title": "Wochenplan für \"{slot_name}\"",
+        "description": "Aktive Tage und Weckzeiten innerhalb dieses Schichtprofils.",
+        "data": {
+          "mon_active": "Mo aktiv",
+          "mon_wake_time": "Mo – Weckzeit",
+          "tue_active": "Di aktiv",
+          "tue_wake_time": "Di – Weckzeit",
+          "wed_active": "Mi aktiv",
+          "wed_wake_time": "Mi – Weckzeit",
+          "thu_active": "Do aktiv",
+          "thu_wake_time": "Do – Weckzeit",
+          "fri_active": "Fr aktiv",
+          "fri_wake_time": "Fr – Weckzeit",
+          "sat_active": "Sa aktiv",
+          "sat_wake_time": "Sa – Weckzeit",
+          "sun_active": "So aktiv",
+          "sun_wake_time": "So – Weckzeit"
+        }
+      },
       "more_people": {
         "title": "Weitere Personen?",
         "data": {
@@ -112,6 +149,43 @@
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
         },
         "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
+      },
+      "shift_cycle_setup": {
+        "title": "Schichtsystem",
+        "description": "Aktiviere einen rotierenden Schichtplan. Das Ankerdatum ist der erste Kalendertag, an dem Profil 1 gilt (JJJJ-MM-TT). Anzahl der Profile und Ankerdatum werden nur verwendet, wenn das Schichtsystem aktiviert ist.",
+        "data": {
+          "enable_shift_cycle": "Schichtsystem aktivieren",
+          "num_slots": "Anzahl der Schichtprofile",
+          "anchor_date": "Ankerdatum für Profil 1 (JJJJ-MM-TT)"
+        }
+      },
+      "shift_slot": {
+        "title": "Schichtprofil {slot_num} von {total}",
+        "description": "Benenne dieses Profil und lege fest, wie viele aufeinanderfolgende Tage es gilt, bevor das nächste Profil aktiv wird.",
+        "data": {
+          "slot_name": "Profilname",
+          "duration_days": "Dauer (Tage)"
+        }
+      },
+      "shift_slot_profile": {
+        "title": "Wochenplan für \"{slot_name}\"",
+        "description": "Aktive Tage und Weckzeiten innerhalb dieses Schichtprofils.",
+        "data": {
+          "mon_active": "Mo aktiv",
+          "mon_wake_time": "Mo – Weckzeit",
+          "tue_active": "Di aktiv",
+          "tue_wake_time": "Di – Weckzeit",
+          "wed_active": "Mi aktiv",
+          "wed_wake_time": "Mi – Weckzeit",
+          "thu_active": "Do aktiv",
+          "thu_wake_time": "Do – Weckzeit",
+          "fri_active": "Fr aktiv",
+          "fri_wake_time": "Fr – Weckzeit",
+          "sat_active": "Sa aktiv",
+          "sat_wake_time": "Sa – Weckzeit",
+          "sun_active": "So aktiv",
+          "sun_wake_time": "So – Weckzeit"
+        }
       },
       "special_rules": {
         "title": "Sonderregeln",

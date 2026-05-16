@@ -23,6 +23,11 @@ from .const import (
     CONF_PERSON_ENTITY_ID,
     CONF_PERSON_NAME,
     CONF_PERSONS,
+    CONF_SHIFT_ANCHOR_DATE,
+    CONF_SHIFT_CYCLE,
+    CONF_SHIFT_SLOT_DAYS,
+    CONF_SHIFT_SLOT_NAME,
+    CONF_SHIFT_SLOTS,
     CONF_SLUG,
     CONF_TARGET_SLEEP_HOURS,
     CONF_WAKE_WINDOW_MINUTES,
@@ -50,6 +55,8 @@ DAY_FIELDS = {
     "sunday": "sun",
 }
 CONF_CONFIGURE_CALDAV = "configure_caldav"
+CONF_ENABLE_SHIFT_CYCLE = "enable_shift_cycle"
+CONF_NUM_SHIFT_SLOTS = "num_slots"
 
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
@@ -72,6 +79,10 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._settings: dict[str, Any] = {}
         self._calendar_configured = False
         self._special_rules_configured = False
+        self._shift_slots: list[dict] = []
+        self._shift_slot_index: int = 0
+        self._num_shift_slots: int = 0
+        self._shift_anchor_date: str = ""
 
     @staticmethod
     @callback
@@ -190,8 +201,71 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._person[CONF_TARGET_SLEEP_HOURS] = float(user_input[CONF_TARGET_SLEEP_HOURS])
             self._person[CONF_WAKE_WINDOW_MINUTES] = int(user_input[CONF_WAKE_WINDOW_MINUTES])
             self._persons.append(self._person)
-            return await self.async_step_more_people()
+            self._shift_slots = []
+            self._shift_slot_index = 0
+            return await self.async_step_shift_cycle_setup()
         return self.async_show_form(step_id="sleep_target", data_schema=_sleep_schema())
+
+    async def async_step_shift_cycle_setup(self, user_input: dict[str, Any] | None = None):
+        """Ask whether this person works shifts."""
+        self._log_step("shift_cycle_setup", user_input)
+        if user_input is not None:
+            if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
+                self._num_shift_slots = int(user_input[CONF_NUM_SHIFT_SLOTS])
+                self._shift_anchor_date = str(user_input[CONF_SHIFT_ANCHOR_DATE]).strip()
+                self._shift_slots = []
+                self._shift_slot_index = 0
+                return await self.async_step_shift_slot()
+            self._persons[-1].pop(CONF_SHIFT_CYCLE, None)
+            return await self.async_step_more_people()
+        current_cycle = self._persons[-1].get(CONF_SHIFT_CYCLE) or {}
+        return self.async_show_form(
+            step_id="shift_cycle_setup",
+            data_schema=_shift_cycle_setup_schema(current_cycle),
+        )
+
+    async def async_step_shift_slot(self, user_input: dict[str, Any] | None = None):
+        """Configure one shift slot name and duration."""
+        self._log_step("shift_slot", user_input)
+        if user_input is not None:
+            self._shift_slots.append({
+                CONF_SHIFT_SLOT_NAME: str(user_input[CONF_SHIFT_SLOT_NAME]).strip() or f"Profile {self._shift_slot_index + 1}",
+                CONF_SHIFT_SLOT_DAYS: int(user_input[CONF_SHIFT_SLOT_DAYS]),
+            })
+            return await self.async_step_shift_slot_profile()
+        return self.async_show_form(
+            step_id="shift_slot",
+            data_schema=_shift_slot_schema(),
+            description_placeholders={
+                "slot_num": str(self._shift_slot_index + 1),
+                "total": str(self._num_shift_slots),
+            },
+        )
+
+    async def async_step_shift_slot_profile(self, user_input: dict[str, Any] | None = None):
+        """Configure weekly schedule for the current shift slot."""
+        self._log_step("shift_slot_profile", user_input)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                self._shift_slots[-1][CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
+            except ValueError:
+                errors["base"] = "invalid_time"
+            else:
+                self._shift_slot_index += 1
+                if self._shift_slot_index < self._num_shift_slots:
+                    return await self.async_step_shift_slot()
+                self._persons[-1][CONF_SHIFT_CYCLE] = {
+                    CONF_SHIFT_ANCHOR_DATE: self._shift_anchor_date,
+                    CONF_SHIFT_SLOTS: self._shift_slots,
+                }
+                return await self.async_step_more_people()
+        return self.async_show_form(
+            step_id="shift_slot_profile",
+            data_schema=_weekly_schema(),
+            description_placeholders={"slot_name": self._shift_slots[-1].get(CONF_SHIFT_SLOT_NAME, "")},
+            errors=errors,
+        )
 
     async def async_step_more_people(self, user_input: dict[str, Any] | None = None):
         """Ask whether to add more people."""
@@ -354,6 +428,30 @@ def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             CONF_MANUAL_HOLIDAY_DATES,
             default=defaults.get(CONF_MANUAL_HOLIDAY_DATES) or "",
         ): selector.TextSelector(),
+    })
+
+
+def _shift_cycle_setup_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    defaults = defaults or {}
+    enabled = bool(defaults.get(CONF_SHIFT_SLOTS))
+    num_slots = max(2, len(defaults.get(CONF_SHIFT_SLOTS) or []))
+    anchor = defaults.get(CONF_SHIFT_ANCHOR_DATE, "")
+    return vol.Schema({
+        vol.Required(CONF_ENABLE_SHIFT_CYCLE, default=enabled): selector.BooleanSelector(),
+        vol.Required(CONF_NUM_SHIFT_SLOTS, default=num_slots): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=2, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
+        ),
+        vol.Required(CONF_SHIFT_ANCHOR_DATE, default=anchor): selector.TextSelector(),
+    })
+
+
+def _shift_slot_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    defaults = defaults or {}
+    return vol.Schema({
+        vol.Required(CONF_SHIFT_SLOT_NAME, default=defaults.get(CONF_SHIFT_SLOT_NAME, "")): selector.TextSelector(),
+        vol.Required(CONF_SHIFT_SLOT_DAYS, default=int(defaults.get(CONF_SHIFT_SLOT_DAYS, 7))): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=1, max=90, step=1, mode=selector.NumberSelectorMode.BOX)
+        ),
     })
 
 
