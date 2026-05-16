@@ -12,11 +12,10 @@
       },
       "calendar": {
         "title": "Kalenderquellen",
-        "description": "Kalender sind optional. Termintitel können eine Weckzeit wie 'wake: 06:30' enthalten.",
+        "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen"
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
         }
       },
       "weekly_profile": {
@@ -44,12 +43,21 @@
         "data": {
           "target_sleep_hours": "Ziel-Schlafdauer (h)",
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
-        }
+        },
+        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
       },
       "more_people": {
         "title": "Weitere Personen?",
         "data": {
           "add_another": "Weitere Person hinzufügen"
+        }
+      },
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
+        "data": {
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
         }
       }
     },
@@ -68,8 +76,7 @@
         "title": "Kalender bearbeiten",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen"
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
         }
       },
       "person": {
@@ -103,6 +110,15 @@
         "data": {
           "target_sleep_hours": "Ziel-Schlafdauer (h)",
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
+        },
+        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
+      },
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
+        "data": {
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
         }
       }
     }
