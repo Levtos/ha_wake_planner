@@ -12,12 +12,10 @@
       },
       "calendar": {
         "title": "Calendar sources",
-        "description": "Calendars are optional. Use calendars already added in Home Assistant. Enable CalDAV only if the calendar is not available in Home Assistant.",
+        "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays",
-          "configure_caldav": "Configure direct CalDAV"
+          "holiday_calendar_entity_id": "Holiday calendar"
         }
       },
       "weekly_profile": {
@@ -53,13 +51,12 @@
           "add_another": "Add another person"
         }
       },
-      "caldav": {
-        "title": "Direct CalDAV (optional)",
-        "description": "Only configure direct CalDAV if the calendar is not already available as a Home Assistant calendar entity.",
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
         "data": {
-          "caldav_url": "CalDAV URL",
-          "caldav_username": "CalDAV username",
-          "caldav_password": "CalDAV password"
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual holiday/vacation dates"
         }
       }
     },
@@ -78,9 +75,7 @@
         "title": "Edit calendars",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays",
-          "configure_caldav": "Configure direct CalDAV"
+          "holiday_calendar_entity_id": "Holiday calendar"
         }
       },
       "person": {
@@ -116,13 +111,12 @@
           "wake_window_minutes": "Wake window tolerance (min)"
         }
       },
-      "caldav": {
-        "title": "Direct CalDAV (optional)",
-        "description": "Only configure direct CalDAV if the calendar is not already available as a Home Assistant calendar entity.",
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
         "data": {
-          "caldav_url": "CalDAV URL",
-          "caldav_username": "CalDAV username",
-          "caldav_password": "CalDAV password"
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual holiday/vacation dates"
         }
       }
     }

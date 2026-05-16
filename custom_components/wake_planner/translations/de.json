@@ -12,12 +12,10 @@
       },
       "calendar": {
         "title": "Kalenderquellen",
-        "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Aktiviere CalDAV nur, wenn der Kalender nicht als Home-Assistant-Kalender verfügbar ist.",
+        "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen",
-          "configure_caldav": "Direktes CalDAV konfigurieren"
+          "holiday_calendar_entity_id": "Feiertagskalender"
         }
       },
       "weekly_profile": {
@@ -53,13 +51,12 @@
           "add_another": "Weitere Person hinzufügen"
         }
       },
-      "caldav": {
-        "title": "Direktes CalDAV (optional)",
-        "description": "Direktes CalDAV nur konfigurieren, wenn der Kalender nicht bereits als Home-Assistant-Kalender-Entität verfügbar ist.",
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Manuelle Daten als YYYY-MM-DD oder Bereiche wie YYYY-MM-DD..YYYY-MM-DD eintragen.",
         "data": {
-          "caldav_url": "CalDAV-URL",
-          "caldav_username": "CalDAV-Benutzername",
-          "caldav_password": "CalDAV-Passwort"
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Feiertags-/Urlaubsdaten"
         }
       }
     },
@@ -78,9 +75,7 @@
         "title": "Kalender bearbeiten",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertagskalender",
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen",
-          "configure_caldav": "Direktes CalDAV konfigurieren"
+          "holiday_calendar_entity_id": "Feiertagskalender"
         }
       },
       "person": {
@@ -116,13 +111,12 @@
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
         }
       },
-      "caldav": {
-        "title": "Direktes CalDAV (optional)",
-        "description": "Direktes CalDAV nur konfigurieren, wenn der Kalender nicht bereits als Home-Assistant-Kalender-Entität verfügbar ist.",
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Manuelle Daten als YYYY-MM-DD oder Bereiche wie YYYY-MM-DD..YYYY-MM-DD eintragen.",
         "data": {
-          "caldav_url": "CalDAV-URL",
-          "caldav_username": "CalDAV-Benutzername",
-          "caldav_password": "CalDAV-Passwort"
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Feiertags-/Urlaubsdaten"
         }
       }
     }

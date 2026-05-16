@@ -9,13 +9,14 @@ from homeassistant import config_entries
 from .config_flow import (
     CALDAV_OPTION_KEYS,
     CALENDAR_OPTION_KEYS,
-    CONF_CONFIGURE_CALDAV,
-    _caldav_schema,
+    SPECIAL_RULE_OPTION_KEYS,
     _calendar_schema,
     _clean_caldav_input,
     _clean_calendar_input,
+    _clean_special_rules_input,
     _person_schema,
     _sleep_schema,
+    _special_rules_schema,
     _weekly_from_input,
     _weekly_schema,
 )
@@ -31,6 +32,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._persons: list[dict[str, Any]] = []
         self._index = 0
         self._initialized = False
+        self._special_rules_configured = False
 
     def _ensure_initialized(self) -> None:
         """Load the current config entry once Home Assistant attaches it."""
@@ -40,6 +42,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._options = {**entry.data, **entry.options}
         self._persons = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
         self._index = 0
+        self._special_rules_configured = False
         self._initialized = True
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
@@ -54,10 +57,20 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             for key in CALENDAR_OPTION_KEYS | CALDAV_OPTION_KEYS:
                 self._options.pop(key, None)
             self._options.update(_clean_calendar_input(user_input))
-            if user_input.get(CONF_CONFIGURE_CALDAV):
-                return await self.async_step_caldav()
-            return self._async_finish_options()
-        return self.async_show_form(step_id="calendar", data_schema=_calendar_schema(self._options))
+            return await self.async_step_person()
+        return self.async_show_form(
+            step_id="calendar",
+            data_schema=_calendar_schema(self._options, self._entity_ids("calendar")),
+        )
+
+    def _entity_ids(self, domain: str) -> list[str]:
+        """Return sorted entity ids for a selector domain."""
+        return sorted(self.hass.states.async_entity_ids(domain))
+
+    def _async_finish_options(self):
+        """Persist options while preserving the configured people."""
+        self._options[CONF_PERSONS] = self._persons
+        return self.async_create_entry(title="", data=self._options)
 
     async def async_step_caldav(self, user_input: dict[str, Any] | None = None):
         """Edit optional direct CalDAV settings."""
@@ -80,7 +93,10 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             person.update({key: value or None for key, value in user_input.items()})
             return await self.async_step_weekly_profile()
-        return self.async_show_form(step_id="person", data_schema=_person_schema(person))
+        return self.async_show_form(
+            step_id="person",
+            data_schema=_person_schema(person, self._entity_ids("person")),
+        )
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
         """Edit weekly profile."""
@@ -92,11 +108,28 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
             except ValueError:
                 errors["base"] = "invalid_time"
             else:
+                if not self._special_rules_configured:
+                    return await self.async_step_special_rules()
                 return await self.async_step_sleep_target()
         return self.async_show_form(
             step_id="weekly_profile",
-            data_schema=_weekly_schema(person.get(CONF_WEEKLY_PROFILE) or default_weekly_profile()),
+            data_schema=_weekly_schema(
+                person.get(CONF_WEEKLY_PROFILE) or default_weekly_profile()
+            ),
             errors=errors,
+        )
+
+    async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
+        """Edit holiday and vacation handling."""
+        if user_input is not None:
+            for key in SPECIAL_RULE_OPTION_KEYS:
+                self._options.pop(key, None)
+            self._options.update(_clean_special_rules_input(user_input))
+            self._special_rules_configured = True
+            return await self.async_step_sleep_target()
+        return self.async_show_form(
+            step_id="special_rules",
+            data_schema=_special_rules_schema(self._options),
         )
 
     async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):

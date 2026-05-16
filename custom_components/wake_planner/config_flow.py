@@ -19,6 +19,7 @@ from .const import (
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+    CONF_MANUAL_HOLIDAY_DATES,
     CONF_PERSON_ENTITY_ID,
     CONF_PERSON_NAME,
     CONF_PERSONS,
@@ -53,13 +54,17 @@ CONF_CONFIGURE_CALDAV = "configure_caldav"
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+}
+SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
+    CONF_MANUAL_HOLIDAY_DATES,
 }
 CALDAV_OPTION_KEYS = {
     CONF_CALDAV_URL,
     CONF_CALDAV_USERNAME,
     CONF_CALDAV_PASSWORD,
 }
+
 
 
 class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -71,6 +76,8 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._persons: list[dict[str, Any]] = []
         self._person: dict[str, Any] = {}
         self._settings: dict[str, Any] = {}
+        self._calendar_configured = False
+        self._special_rules_configured = False
 
     @staticmethod
     @callback
@@ -102,17 +109,47 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_SLUG: slug,
                     CONF_PERSON_ENTITY_ID: user_input.get(CONF_PERSON_ENTITY_ID) or None,
                 }
+                if not self._calendar_configured:
+                    return await self.async_step_calendar()
                 return await self.async_step_weekly_profile()
-        return self.async_show_form(step_id="person", data_schema=_person_schema(), errors=errors)
+        return self.async_show_form(
+            step_id="person",
+            data_schema=_person_schema(entity_ids=self._entity_ids("person")),
+            errors=errors,
+        )
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
-        """Configure optional calendar sources and holiday behavior."""
+        """Configure optional calendar sources."""
         if user_input is not None:
             self._settings.update(_clean_calendar_input(user_input))
-            if user_input.get(CONF_CONFIGURE_CALDAV):
-                return await self.async_step_caldav()
-            return await self._async_create_config_entry()
-        return self.async_show_form(step_id="calendar", data_schema=_calendar_schema())
+            self._calendar_configured = True
+            return await self.async_step_weekly_profile()
+        return self.async_show_form(
+            step_id="calendar",
+            data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),
+        )
+
+    async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
+        """Configure holiday and vacation handling."""
+        if user_input is not None:
+            self._settings.update(_clean_special_rules_input(user_input))
+            self._special_rules_configured = True
+            return await self.async_step_sleep_target()
+        return self.async_show_form(
+            step_id="special_rules",
+            data_schema=_special_rules_schema(self._settings),
+        )
+
+    def _entity_ids(self, domain: str) -> list[str]:
+        """Return sorted entity ids for a selector domain."""
+        return sorted(self.hass.states.async_entity_ids(domain))
+
+    async def _async_create_config_entry(self):
+        """Create the Wake Planner config entry."""
+        data = {CONF_PERSONS: self._persons, **self._settings}
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title="Wake Planner", data=data)
 
     async def async_step_caldav(self, user_input: dict[str, Any] | None = None):
         """Configure optional direct CalDAV access."""
@@ -137,6 +174,8 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except ValueError:
                 errors["base"] = "invalid_time"
             else:
+                if not self._special_rules_configured:
+                    return await self.async_step_special_rules()
                 return await self.async_step_sleep_target()
         return self.async_show_form(
             step_id="weekly_profile",
@@ -159,7 +198,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if user_input["add_another"]:
                 self._person = {}
                 return await self.async_step_person()
-            return await self.async_step_calendar()
+            return await self._async_create_config_entry()
         return self.async_show_form(
             step_id="more_people",
             data_schema=vol.Schema({
@@ -181,14 +220,39 @@ def _normalize(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _optional_entity_key(key: str, suggested_value: str | None) -> vol.Optional:
-    """Return an optional entity field that can be cleared in options flows."""
-    if suggested_value:
-        return vol.Optional(key, description={"suggested_value": suggested_value})
-    return vol.Optional(key)
+def _entity_options(
+    entity_ids: list[str] | None,
+    current: str | None = None,
+) -> list[dict[str, str]]:
+    """Return select options for optional Home Assistant entity ids."""
+    options = [{"value": "", "label": "—"}]
+    entity_set = set(entity_ids or [])
+    if current:
+        entity_set.add(current)
+    options.extend(
+        {"value": entity_id, "label": entity_id}
+        for entity_id in sorted(entity_set)
+    )
+    return options
 
 
-def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _entity_select(
+    entity_ids: list[str] | None,
+    current: str | None = None,
+) -> selector.SelectSelector:
+    """Return a clearable select selector populated from current HA entities."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=_entity_options(entity_ids, current),
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _person_schema(
+    defaults: dict[str, Any] | None = None,
+    entity_ids: list[str] | None = None,
+) -> vol.Schema:
     defaults = defaults or {}
     name = defaults.get(CONF_PERSON_NAME)
     name_key = (
@@ -196,14 +260,12 @@ def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         if name
         else vol.Required(CONF_PERSON_NAME)
     )
-    person_entity_key = _optional_entity_key(
-        CONF_PERSON_ENTITY_ID,
-        defaults.get(CONF_PERSON_ENTITY_ID),
-    )
+    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
     return vol.Schema({
         name_key: selector.TextSelector(),
-        person_entity_key: selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="person")
+        vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity or ""): _entity_select(
+            entity_ids,
+            person_entity,
         ),
     })
 
@@ -256,40 +318,45 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     })
 
 
-def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _calendar_schema(
+    defaults: dict[str, Any] | None = None,
+    entity_ids: list[str] | None = None,
+) -> vol.Schema:
     defaults = defaults or {}
-    schema: dict[Any, Any] = {}
+    calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
+    holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
+    return vol.Schema({
+        vol.Optional(
+            CONF_CALENDAR_ENTITY_ID,
+            default=calendar_entity or "",
+        ): _entity_select(entity_ids, calendar_entity),
+        vol.Optional(
+            CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+            default=holiday_entity or "",
+        ): _entity_select(entity_ids, holiday_entity),
+    })
 
-    calendar_entity_key = _optional_entity_key(
-        CONF_CALENDAR_ENTITY_ID,
-        defaults.get(CONF_CALENDAR_ENTITY_ID),
-    )
-    schema[calendar_entity_key] = selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="calendar")
-    )
 
-    holiday_entity_key = _optional_entity_key(
-        CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-        defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
-    )
-    schema[holiday_entity_key] = selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="calendar")
-    )
-
-    holiday_behavior_key = vol.Required(
-        CONF_HOLIDAY_BEHAVIOR,
-        default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
-    )
-    schema[holiday_behavior_key] = selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
-            translation_key="holiday_behavior",
-        )
-    )
-    schema[vol.Optional(CONF_CONFIGURE_CALDAV, default=_has_caldav_config(defaults))] = (
-        selector.BooleanSelector()
-    )
-    return vol.Schema(schema)
+def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return holiday and vacation rule settings."""
+    defaults = defaults or {}
+    return vol.Schema({
+        vol.Required(
+            CONF_HOLIDAY_BEHAVIOR,
+            default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
+                translation_key="holiday_behavior",
+            )
+        ),
+        vol.Optional(
+            CONF_MANUAL_HOLIDAY_DATES,
+            default=defaults.get(CONF_MANUAL_HOLIDAY_DATES) or "",
+        ): selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True)
+        ),
+    })
 
 
 def _caldav_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -325,13 +392,13 @@ def _clean_calendar_input(user_input: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _clean_caldav_input(user_input: dict[str, Any]) -> dict[str, Any]:
-    """Drop empty optional direct CalDAV values before storing config entry data."""
+def _clean_special_rules_input(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Drop empty optional special-rule values before storing config entry data."""
     normalized = _normalize(user_input)
     return {
         key: value.strip() if isinstance(value, str) else value
         for key, value in normalized.items()
-        if key in CALDAV_OPTION_KEYS and value is not None
+        if key in SPECIAL_RULE_OPTION_KEYS and value is not None
     }
 
 
