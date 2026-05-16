@@ -21,6 +21,7 @@ from .const import (
     CONF_CALENDAR_SKIP_TITLES,
     CONF_CALENDAR_WAKE_PATTERN,
     CONF_HOLIDAY_BEHAVIOR,
+    CONF_MANUAL_HOLIDAY_DATES,
     CONF_PERSONS,
     CONF_SLUG,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -99,6 +100,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             self.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
             start.date(),
             (start + timedelta(days=14)).date(),
+            self.options.get(CONF_MANUAL_HOLIDAY_DATES),
         )
         engine = RuleEngine(
             runtime_states=self.runtime_states,
