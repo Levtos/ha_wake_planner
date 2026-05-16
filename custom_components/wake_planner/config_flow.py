@@ -145,13 +145,19 @@ def _normalize(data: dict) -> dict:
 
 def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
-    return vol.Schema({
+    schema: dict[Any, Any] = {
         vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): selector.TextSelector(),
-        vol.Optional(CONF_PERSON_ENTITY_ID, default=defaults.get(CONF_PERSON_ENTITY_ID)): vol.Any(
-            None,
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="person")),
-        ),
-    })
+    }
+    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
+    if person_entity:
+        schema[vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="person")
+        )
+    else:
+        schema[vol.Optional(CONF_PERSON_ENTITY_ID)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="person")
+        )
+    return vol.Schema(schema)
 
 
 def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -196,22 +202,35 @@ def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 
 def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
-    return vol.Schema({
-        vol.Optional(CONF_CALENDAR_ENTITY_ID, default=defaults.get(CONF_CALENDAR_ENTITY_ID)): vol.Any(
-            None,
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        ),
-        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)): vol.Any(
-            None,
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        ),
-        vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)): selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
-                translation_key="holiday_behavior",
-            )
-        ),
-    })
+    schema: dict[Any, Any] = {}
+
+    cal = defaults.get(CONF_CALENDAR_ENTITY_ID)
+    if cal:
+        schema[vol.Optional(CONF_CALENDAR_ENTITY_ID, default=cal)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        )
+    else:
+        schema[vol.Optional(CONF_CALENDAR_ENTITY_ID)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        )
+
+    hol = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
+    if hol:
+        schema[vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=hol)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        )
+    else:
+        schema[vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="calendar")
+        )
+
+    schema[vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP))] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
+            translation_key="holiday_behavior",
+        )
+    )
+    return vol.Schema(schema)
 
 
 def _clean_calendar_input(user_input: dict[str, Any]) -> dict[str, Any]:
