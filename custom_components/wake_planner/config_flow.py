@@ -13,6 +13,9 @@ from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
 from .const import (
+    CONF_CALDAV_PASSWORD,
+    CONF_CALDAV_URL,
+    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -46,6 +49,8 @@ DAY_FIELDS = {
     "saturday": "sat",
     "sunday": "sun",
 }
+CONF_CONFIGURE_CALDAV = "configure_caldav"
+
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
@@ -76,7 +81,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         from .options_flow import WakePlannerOptionsFlow
 
-        return WakePlannerOptionsFlow(config_entry)
+        return WakePlannerOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Start the setup flow with the person step."""

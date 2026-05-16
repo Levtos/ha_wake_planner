@@ -7,7 +7,7 @@
         "description": "Erstelle ein Weckprofil. Die Home-Assistant-Person ist optional.",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home-Assistant-Person"
+          "person_entity_id": "Home-Assistant-Person-Entity-ID"
         }
       },
       "calendar": {
@@ -83,7 +83,7 @@
         "title": "Person bearbeiten",
         "data": {
           "name": "Name",
-          "person_entity_id": "Home-Assistant-Person"
+          "person_entity_id": "Home-Assistant-Person-Entity-ID"
         }
       },
       "weekly_profile": {
