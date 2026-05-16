@@ -141,8 +141,6 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_create_config_entry(self):
         """Create the Wake Planner config entry."""
         data = {CONF_PERSONS: self._persons, **self._settings}
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
         return self.async_create_entry(title="Wake Planner", data=data)
 
     async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):

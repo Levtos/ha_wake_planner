@@ -89,7 +89,7 @@ def _manual_holiday_map(
         if not item:
             continue
         range_match = re.fullmatch(
-            r"(\d{4}-\d{2}-\d{2})\s*(?:\.\.|/|to|bis)\s*(\d{4}-\d{2}-\d{2})",
+            r"(.+?)\s*(?:\.\.|/|to|bis)\s*(.+)",
             item,
             flags=re.IGNORECASE,
         )
@@ -100,6 +100,23 @@ def _manual_holiday_map(
     return holidays
 
 
+def _parse_manual_date(raw_value: str, year: int) -> date | None:
+    """Parse one manual date in yearly or one-off syntax."""
+    value = raw_value.strip()
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return date.fromisoformat(value)
+        if re.fullmatch(r"\d{8}", value):
+            return date.fromisoformat(f"{value[:4]}-{value[4:6]}-{value[6:]}")
+        if re.fullmatch(r"\d{2}-\d{2}", value):
+            return date.fromisoformat(f"{year}-{value}")
+        if re.fullmatch(r"\d{4}", value):
+            return date.fromisoformat(f"{year}-{value[:2]}-{value[2:]}")
+    except ValueError:
+        return None
+    return None
+
+
 def _add_manual_range(
     holidays: dict[date, tuple[bool, str | None]],
     raw_start: str,
@@ -108,18 +125,24 @@ def _add_manual_range(
     map_end: date,
 ) -> None:
     """Add a parsed manual holiday range to the map."""
-    try:
-        range_start = date.fromisoformat(raw_start)
-        range_end = date.fromisoformat(raw_end)
-    except ValueError:
+    added = False
+    for year in range(map_start.year, map_end.year + 1):
+        range_start = _parse_manual_date(raw_start, year)
+        range_end = _parse_manual_date(raw_end, year)
+        if range_start is None or range_end is None:
+            continue
+
+        if range_end < range_start:
+            range_start, range_end = range_end, range_start
+
+        current = max(range_start, map_start)
+        last = min(range_end, map_end)
+        while current <= last:
+            holidays[current] = (True, "Manual holiday")
+            current += timedelta(days=1)
+            added = True
+        if len(raw_start.strip()) >= 8 and len(raw_end.strip()) >= 8:
+            return
+
+    if not added:
         _LOGGER.debug("Ignoring invalid manual holiday date/range: %s..%s", raw_start, raw_end)
-        return
-
-    if range_end < range_start:
-        range_start, range_end = range_end, range_start
-
-    current = max(range_start, map_start)
-    last = min(range_end, map_end)
-    while current <= last:
-        holidays[current] = (True, "Manual holiday")
-        current += timedelta(days=1)

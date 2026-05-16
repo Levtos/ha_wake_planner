@@ -43,7 +43,8 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
-        }
+        },
+        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
       },
       "more_people": {
         "title": "More people?",
@@ -53,10 +54,10 @@
       },
       "special_rules": {
         "title": "Special rules",
-        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
+        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
         "data": {
           "holiday_behavior": "Behaviour on weekends/holidays/vacation",
-          "manual_holiday_dates": "Manual holiday/vacation dates"
+          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
         }
       }
     },
@@ -109,6 +110,15 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
+        },
+        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
         }
       },
       "special_rules": {

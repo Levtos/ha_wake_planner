@@ -43,7 +43,8 @@
         "data": {
           "target_sleep_hours": "Ziel-Schlafdauer (h)",
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
-        }
+        },
+        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
       },
       "more_people": {
         "title": "Weitere Personen?",
@@ -53,10 +54,10 @@
       },
       "special_rules": {
         "title": "Sonderregeln",
-        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Manuelle Daten als YYYY-MM-DD oder Bereiche wie YYYY-MM-DD..YYYY-MM-DD eintragen.",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
         "data": {
           "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
-          "manual_holiday_dates": "Manuelle Feiertags-/Urlaubsdaten"
+          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
         }
       }
     },
@@ -109,6 +110,15 @@
         "data": {
           "target_sleep_hours": "Ziel-Schlafdauer (h)",
           "wake_window_minutes": "Weckfenster-Toleranz (min)"
+        },
+        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
+      },
+      "special_rules": {
+        "title": "Sonderregeln",
+        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
+        "data": {
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
+          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
         }
       },
       "special_rules": {
