@@ -12,11 +12,10 @@
       },
       "calendar": {
         "title": "Calendar sources",
-        "description": "Calendars are optional. Event titles can contain a wake time such as 'wake: 06:30'.",
+        "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "holiday_calendar_entity_id": "Holiday calendar"
         }
       },
       "weekly_profile": {
@@ -51,6 +50,14 @@
         "data": {
           "add_another": "Add another person"
         }
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual holiday/vacation dates"
+        }
       }
     },
     "error": {
@@ -68,8 +75,7 @@
         "title": "Edit calendars",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "holiday_behavior": "Behaviour on weekends/holidays"
+          "holiday_calendar_entity_id": "Holiday calendar"
         }
       },
       "person": {
@@ -103,6 +109,14 @@
         "data": {
           "target_sleep_hours": "Target sleep duration (h)",
           "wake_window_minutes": "Wake window tolerance (min)"
+        }
+      },
+      "special_rules": {
+        "title": "Special rules",
+        "description": "Choose how weekends, holidays, vacations, and manually added days affect the wake plan. Manual dates use YYYY-MM-DD or ranges like YYYY-MM-DD..YYYY-MM-DD.",
+        "data": {
+          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
+          "manual_holiday_dates": "Manual holiday/vacation dates"
         }
       }
     }

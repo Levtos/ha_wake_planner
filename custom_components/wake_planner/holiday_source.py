@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 import logging
+import re
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -47,10 +49,15 @@ async def async_holiday_map(
     holiday_calendar_entity_id: str | None,
     start: date,
     end: date,
+    manual_holiday_dates: Any = None,
 ) -> dict[date, tuple[bool, str | None]]:
-    """Build a date keyed holiday map from weekends and optional holiday calendar events."""
+    """Build a date keyed holiday map from weekends and configured holiday sources."""
     source = HolidaySource(hass, holiday_calendar_entity_id)
-    holidays: dict[date, tuple[bool, str | None]] = {}
+    holidays: dict[date, tuple[bool, str | None]] = _manual_holiday_map(
+        manual_holiday_dates,
+        start,
+        end,
+    )
     current = start
     while current <= end:
         if current.weekday() >= 5:
@@ -59,3 +66,60 @@ async def async_holiday_map(
             holidays[current] = (True, "Holiday calendar")
         current += timedelta(days=1)
     return holidays
+
+
+def _manual_holiday_map(
+    configured_dates: Any,
+    start: date,
+    end: date,
+) -> dict[date, tuple[bool, str | None]]:
+    """Parse manually configured dates and ranges into holiday map entries."""
+    holidays: dict[date, tuple[bool, str | None]] = {}
+    if not configured_dates:
+        return holidays
+
+    raw_dates = configured_dates
+    if isinstance(configured_dates, str):
+        raw_dates = re.split(r"[,;\n]+", configured_dates)
+
+    for raw_item in raw_dates:
+        if not raw_item:
+            continue
+        item = str(raw_item).strip()
+        if not item:
+            continue
+        range_match = re.fullmatch(
+            r"(\d{4}-\d{2}-\d{2})\s*(?:\.\.|/|to|bis)\s*(\d{4}-\d{2}-\d{2})",
+            item,
+            flags=re.IGNORECASE,
+        )
+        if range_match:
+            _add_manual_range(holidays, range_match.group(1), range_match.group(2), start, end)
+            continue
+        _add_manual_range(holidays, item, item, start, end)
+    return holidays
+
+
+def _add_manual_range(
+    holidays: dict[date, tuple[bool, str | None]],
+    raw_start: str,
+    raw_end: str,
+    map_start: date,
+    map_end: date,
+) -> None:
+    """Add a parsed manual holiday range to the map."""
+    try:
+        range_start = date.fromisoformat(raw_start)
+        range_end = date.fromisoformat(raw_end)
+    except ValueError:
+        _LOGGER.debug("Ignoring invalid manual holiday date/range: %s..%s", raw_start, raw_end)
+        return
+
+    if range_end < range_start:
+        range_start, range_end = range_end, range_start
+
+    current = max(range_start, map_start)
+    last = min(range_end, map_end)
+    while current <= last:
+        holidays[current] = (True, "Manual holiday")
+        current += timedelta(days=1)
