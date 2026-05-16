@@ -67,7 +67,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         from .options_flow import WakePlannerOptionsFlow
 
-        return WakePlannerOptionsFlow(config_entry)
+        return WakePlannerOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Start the setup flow with the person step."""
@@ -139,25 +139,35 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 def _normalize(data: dict) -> dict:
-    """Coerce empty strings to None."""
-    return {k: (None if v == "" else v) for k, v in data.items()}
+    """Coerce empty optional selector values to None."""
+    return {k: (None if v in ("", [], {}) else v) for k, v in data.items()}
+
+
+def _optional_entity_key(key: str, suggested_value: str | None) -> vol.Optional:
+    """Return an optional entity field that can be cleared in options flows."""
+    if suggested_value:
+        return vol.Optional(key, description={"suggested_value": suggested_value})
+    return vol.Optional(key)
 
 
 def _person_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
-    schema: dict[Any, Any] = {
-        vol.Required(CONF_PERSON_NAME, default=defaults.get(CONF_PERSON_NAME, vol.UNDEFINED)): selector.TextSelector(),
-    }
-    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
-    if person_entity:
-        schema[vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity)] = selector.EntitySelector(
+    name = defaults.get(CONF_PERSON_NAME)
+    name_key = (
+        vol.Required(CONF_PERSON_NAME, default=name)
+        if name
+        else vol.Required(CONF_PERSON_NAME)
+    )
+    person_entity_key = _optional_entity_key(
+        CONF_PERSON_ENTITY_ID,
+        defaults.get(CONF_PERSON_ENTITY_ID),
+    )
+    return vol.Schema({
+        name_key: selector.TextSelector(),
+        person_entity_key: selector.EntitySelector(
             selector.EntitySelectorConfig(domain="person")
-        )
-    else:
-        schema[vol.Optional(CONF_PERSON_ENTITY_ID)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="person")
-        )
-    return vol.Schema(schema)
+        ),
+    })
 
 
 def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -204,27 +214,27 @@ def _calendar_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     schema: dict[Any, Any] = {}
 
-    cal = defaults.get(CONF_CALENDAR_ENTITY_ID)
-    if cal:
-        schema[vol.Optional(CONF_CALENDAR_ENTITY_ID, default=cal)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="calendar")
-        )
-    else:
-        schema[vol.Optional(CONF_CALENDAR_ENTITY_ID)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="calendar")
-        )
+    calendar_entity_key = _optional_entity_key(
+        CONF_CALENDAR_ENTITY_ID,
+        defaults.get(CONF_CALENDAR_ENTITY_ID),
+    )
+    schema[calendar_entity_key] = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="calendar")
+    )
 
-    hol = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
-    if hol:
-        schema[vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=hol)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="calendar")
-        )
-    else:
-        schema[vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="calendar")
-        )
+    holiday_entity_key = _optional_entity_key(
+        CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+        defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
+    )
+    schema[holiday_entity_key] = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="calendar")
+    )
 
-    schema[vol.Required(CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP))] = selector.SelectSelector(
+    holiday_behavior_key = vol.Required(
+        CONF_HOLIDAY_BEHAVIOR,
+        default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
+    )
+    schema[holiday_behavior_key] = selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
             translation_key="holiday_behavior",

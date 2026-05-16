@@ -22,18 +22,30 @@ from .util import default_weekly_profile
 class WakePlannerOptionsFlow(config_entries.OptionsFlow):
     """Edit Wake Planner settings without YAML."""
 
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self.entry = entry
-        self._options: dict[str, Any] = {**entry.data, **entry.options}
-        self._persons: list[dict[str, Any]] = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
+    def __init__(self) -> None:
+        self._options: dict[str, Any] = {}
+        self._persons: list[dict[str, Any]] = []
         self._index = 0
+        self._initialized = False
+
+    def _ensure_initialized(self) -> None:
+        """Load the current config entry once Home Assistant attaches it."""
+        if self._initialized:
+            return
+        entry = self.config_entry
+        self._options = {**entry.data, **entry.options}
+        self._persons = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
+        self._index = 0
+        self._initialized = True
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Entry point."""
-        return await self.async_step_calendar()
+        self._ensure_initialized()
+        return await self.async_step_calendar(user_input)
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
         """Edit calendar settings and holiday behavior."""
+        self._ensure_initialized()
         if user_input is not None:
             for key in CALENDAR_OPTION_KEYS:
                 self._options.pop(key, None)
