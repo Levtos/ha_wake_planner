@@ -414,6 +414,16 @@ class WakePlannerPanel extends HTMLElement {
       <div style="margin:10px 0 6px"><span class="label" style="font-size:11px;opacity:.7;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Weekdays (any match)</span></div>
       <div class="weekday-toggle">${weekdaysHtml}</div>
 
+      <div class="row" style="gap:14px;margin-top:12px">
+        <label class="field"><span class="label">Holiday</span>
+          <select data-rule-field="${slug}|${rule.id}|on_holiday">
+            <option value="" ${rule.on_holiday === null || rule.on_holiday === undefined ? "selected" : ""}>Ignore (any day)</option>
+            <option value="true" ${rule.on_holiday === true ? "selected" : ""}>Only on holidays</option>
+            <option value="false" ${rule.on_holiday === false ? "selected" : ""}>Only on non-holidays</option>
+          </select>
+        </label>
+      </div>
+
       <details style="margin-top:12px">
         <summary style="cursor:pointer;font-size:12px;opacity:.75">Advanced conditions (date range, alternating weeks, shift cycle, one-off dates)</summary>
         <div class="row" style="gap:14px;margin-top:10px">
@@ -580,6 +590,11 @@ class WakePlannerPanel extends HTMLElement {
     }
     for (const k of ["date_from", "date_to", "week_anchor", "cycle_anchor"]) {
       if (out[k] === "") out[k] = null;
+    }
+    if ("on_holiday" in out) {
+      if (out.on_holiday === "" || out.on_holiday === null) out.on_holiday = null;
+      else if (out.on_holiday === "true" || out.on_holiday === true) out.on_holiday = true;
+      else if (out.on_holiday === "false" || out.on_holiday === false) out.on_holiday = false;
     }
     if (out.action === "skip") out.wake_time = null;
     return out;
