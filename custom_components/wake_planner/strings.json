@@ -2,108 +2,15 @@
   "title": "Wake Planner",
   "config": {
     "step": {
-      "person": {
-        "title": "Add a person",
-        "description": "Create a wake profile. The Home Assistant person entity is optional.",
+      "user": {
+        "title": "Wake Planner setup",
+        "description": "Pick the calendars Wake Planner should read (both optional — you can add them later in Settings). People and rules are managed in the Wake Planner sidebar panel after setup.",
         "data": {
-          "name": "Name",
-          "person_entity_id": "Home Assistant person entity ID"
-        }
-      },
-      "calendar": {
-        "title": "Calendar sources",
-        "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
-        "data": {
-          "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_to_calendar": "Write wake events to the configured calendar"
-        }
-      },
-      "weekly_profile": {
-        "title": "Weekly plan",
-        "description": "Set a global wake time to apply to all active days at once, or configure each day individually.",
-        "data": {
-          "global_wake_time": "Global wake time (HH:MM, applies to all active days)",
-          "mon_active": "Mon active",
-          "mon_wake_time": "Mon – Wake time",
-          "tue_active": "Tue active",
-          "tue_wake_time": "Tue – Wake time",
-          "wed_active": "Wed active",
-          "wed_wake_time": "Wed – Wake time",
-          "thu_active": "Thu active",
-          "thu_wake_time": "Thu – Wake time",
-          "fri_active": "Fri active",
-          "fri_wake_time": "Fri – Wake time",
-          "sat_active": "Sat active",
-          "sat_wake_time": "Sat – Wake time",
-          "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
-        }
-      },
-      "sleep_target": {
-        "title": "Sleep target and wake window",
-        "data": {
-          "target_sleep_hours": "Target sleep duration (h)",
-          "wake_window_minutes": "Wake window tolerance (min)"
-        },
-        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
-      },
-      "shift_cycle_setup": {
-        "title": "Shift cycle",
-        "description": "Enable a rotating shift schedule. Anchor date is the first calendar day of profile 1 (YYYY-MM-DD).",
-        "data": {
-          "enable_shift_cycle": "Enable shift cycle",
-          "num_slots": "Number of shift profiles",
-          "anchor_date": "Anchor date for profile 1 (YYYY-MM-DD)"
-        }
-      },
-      "shift_slot": {
-        "title": "Shift profile {slot_num} of {total}",
-        "description": "Name this profile and set how many consecutive days it lasts.",
-        "data": {
-          "slot_name": "Profile name",
-          "duration_days": "Duration (days)"
-        }
-      },
-      "shift_slot_profile": {
-        "title": "Weekly schedule for \"{slot_name}\"",
-        "description": "Active days and wake times during this shift profile.",
-        "data": {
-          "mon_active": "Mon active",
-          "mon_wake_time": "Mon – Wake time",
-          "tue_active": "Tue active",
-          "tue_wake_time": "Tue – Wake time",
-          "wed_active": "Wed active",
-          "wed_wake_time": "Wed – Wake time",
-          "thu_active": "Thu active",
-          "thu_wake_time": "Thu – Wake time",
-          "fri_active": "Fri active",
-          "fri_wake_time": "Fri – Wake time",
-          "sat_active": "Sat active",
-          "sat_wake_time": "Sat – Wake time",
-          "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
-        }
-      },
-      "more_people": {
-        "title": "More people?",
-        "data": {
-          "add_another": "Add another person"
-        }
-      },
-      "special_rules": {
-        "title": "Special rules",
-        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
-        "data": {
-          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
-          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
+          "calendar_entity_id": "Wake calendar (events like 'wake: 06:30' override that day)",
+          "holiday_calendar_entity_id": "Holiday/vacation calendar (all-day events)",
+          "write_to_calendar": "Write planned wake events into the wake calendar"
         }
       }
-    },
-    "error": {
-      "invalid_name": "Enter a valid name.",
-      "duplicate_person": "A person with this name already exists.",
-      "invalid_time": "Enter wake times as HH:MM."
     },
     "abort": {
       "already_configured": "Wake Planner is already configured."
@@ -112,101 +19,26 @@
   "options": {
     "step": {
       "calendar": {
-        "title": "Edit calendars",
+        "title": "Calendars",
         "data": {
-          "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_to_calendar": "Write wake events to the configured calendar"
-        }
-      },
-      "person": {
-        "title": "Edit person",
-        "data": {
-          "name": "Name",
-          "person_entity_id": "Home Assistant person entity ID"
-        }
-      },
-      "weekly_profile": {
-        "title": "Edit weekly plan",
-        "description": "Set a global wake time to apply to all active days at once, or configure each day individually.",
-        "data": {
-          "global_wake_time": "Global wake time (HH:MM, applies to all active days)",
-          "mon_active": "Mon active",
-          "mon_wake_time": "Mon – Wake time",
-          "tue_active": "Tue active",
-          "tue_wake_time": "Tue – Wake time",
-          "wed_active": "Wed active",
-          "wed_wake_time": "Wed – Wake time",
-          "thu_active": "Thu active",
-          "thu_wake_time": "Thu – Wake time",
-          "fri_active": "Fri active",
-          "fri_wake_time": "Fri – Wake time",
-          "sat_active": "Sat active",
-          "sat_wake_time": "Sat – Wake time",
-          "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
-        }
-      },
-      "sleep_target": {
-        "title": "Edit sleep settings",
-        "data": {
-          "target_sleep_hours": "Target sleep duration (h)",
-          "wake_window_minutes": "Wake window tolerance (min)"
-        },
-        "description": "Target sleep duration is used for the suggested bedtime. Wake window tolerance only controls how many minutes before/after the wake time the wake_needed binary sensor is on; it does not move the wake time automatically."
-      },
-      "shift_cycle_setup": {
-        "title": "Shift cycle",
-        "description": "Enable a rotating shift schedule. Anchor date is the first calendar day of profile 1 (YYYY-MM-DD).",
-        "data": {
-          "enable_shift_cycle": "Enable shift cycle",
-          "num_slots": "Number of shift profiles",
-          "anchor_date": "Anchor date for profile 1 (YYYY-MM-DD)"
-        }
-      },
-      "shift_slot": {
-        "title": "Shift profile {slot_num} of {total}",
-        "description": "Name this profile and set how many consecutive days it lasts.",
-        "data": {
-          "slot_name": "Profile name",
-          "duration_days": "Duration (days)"
-        }
-      },
-      "shift_slot_profile": {
-        "title": "Weekly schedule for \"{slot_name}\"",
-        "description": "Active days and wake times during this shift profile.",
-        "data": {
-          "mon_active": "Mon active",
-          "mon_wake_time": "Mon – Wake time",
-          "tue_active": "Tue active",
-          "tue_wake_time": "Tue – Wake time",
-          "wed_active": "Wed active",
-          "wed_wake_time": "Wed – Wake time",
-          "thu_active": "Thu active",
-          "thu_wake_time": "Thu – Wake time",
-          "fri_active": "Fri active",
-          "fri_wake_time": "Fri – Wake time",
-          "sat_active": "Sat active",
-          "sat_wake_time": "Sat – Wake time",
-          "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
+          "calendar_entity_id": "Wake calendar",
+          "holiday_calendar_entity_id": "Holiday calendar",
+          "write_to_calendar": "Write wake events into the wake calendar"
         }
       },
       "special_rules": {
-        "title": "Special rules",
-        "description": "Define how weekends, holidays, vacation, and manually entered dates affect the wake plan. Use YYYY-MM-DD for one-off dates, MM-DD for yearly dates (for example 10-21), ranges like YYYY-MM-DD..YYYY-MM-DD, and separate multiple entries with commas.",
+        "title": "Weekends & holidays",
+        "description": "How weekends, holidays and manually entered dates affect the wake plan. Manual dates: YYYY-MM-DD, MM-DD (yearly), ranges like YYYY-MM-DD..YYYY-MM-DD, comma separated.",
         "data": {
-          "holiday_behavior": "Behaviour on weekends/holidays/vacation",
-          "manual_holiday_dates": "Manual dates/ranges (comma-separated)"
+          "holiday_behavior": "Behaviour on weekends/holidays",
+          "manual_holiday_dates": "Manual dates / ranges"
         }
       }
     }
   },
   "entity": {
     "binary_sensor": {
-      "wake_needed": {
-        "name": "Wake needed"
-      }
+      "wake_needed": { "name": "Wake needed" }
     },
     "sensor": {
       "wake_state": {
@@ -219,15 +51,7 @@
           "inactive": "Inactive"
         }
       },
-      "next_wake": {
-        "name": "Next wake"
-      },
-      "sleep_duration_avg": {
-        "name": "Average sleep duration"
-      },
-      "suggested_bedtime": {
-        "name": "Suggested bedtime"
-      }
+      "next_wake": { "name": "Next wake" }
     }
   },
   "services": {
@@ -235,90 +59,51 @@
       "name": "Skip next wake",
       "description": "Skip the next wake for a person.",
       "fields": {
-        "person_id": {
-          "name": "Person ID",
-          "description": "Wake Planner person slug."
-        }
+        "person_id": { "name": "Person ID", "description": "Wake Planner person slug." }
       }
     },
     "set_override": {
       "name": "Set override",
       "description": "Set a manual wake time override.",
       "fields": {
-        "person_id": {
-          "name": "Person ID"
-        },
-        "wake_time": {
-          "name": "Wake time"
-        },
-        "until": {
-          "name": "Until date"
-        }
+        "person_id": { "name": "Person ID" },
+        "wake_time": { "name": "Wake time" },
+        "until": { "name": "Until date" }
       }
     },
     "clear_override": {
       "name": "Clear override",
       "description": "Clear manual override and skip state.",
+      "fields": { "person_id": { "name": "Person ID" } }
+    },
+    "add_person": {
+      "name": "Add person",
+      "description": "Create a new Wake Planner person with a default Mon–Fri 07:00 rule.",
       "fields": {
-        "person_id": {
-          "name": "Person ID"
-        }
+        "name": { "name": "Name" },
+        "person_entity_id": { "name": "Home Assistant person entity (optional)" },
+        "entry_id": { "name": "Config entry id (only needed with multiple Wake Planner entries)" }
       }
     },
-    "log_sleep": {
-      "name": "Log sleep",
-      "description": "Add a manual sleep log entry.",
-      "fields": {
-        "person_id": {
-          "name": "Person ID"
-        },
-        "sleep_time": {
-          "name": "Sleep time"
-        },
-        "wake_time": {
-          "name": "Wake time"
-        }
-      }
+    "remove_person": {
+      "name": "Remove person",
+      "description": "Delete a Wake Planner person and all their rules.",
+      "fields": { "person_id": { "name": "Person ID" } }
     },
-    "set_weekly_profile": {
-      "name": "Set weekly profile",
-      "description": "Update a person's weekly wake schedule.",
+    "set_rules": {
+      "name": "Set rules",
+      "description": "Replace a person's full rule list. Each rule is a dict (id, name, priority, enabled, weekdays, action, wake_time, optional date_range / week_interval+week_anchor / specific_dates / cycle_*).",
       "fields": {
-        "person_id": {
-          "name": "Person ID",
-          "description": "Wake Planner person slug."
-        },
-        "profile": {
-          "name": "Profile",
-          "description": "Dict with day names as keys, each containing active (bool) and wake_time (HH:MM)."
-        }
-      }
-    },
-    "set_sleep_settings": {
-      "name": "Set sleep settings",
-      "description": "Update target sleep duration and wake window.",
-      "fields": {
-        "person_id": {
-          "name": "Person ID"
-        },
-        "target_sleep_hours": {
-          "name": "Target sleep hours"
-        },
-        "wake_window_minutes": {
-          "name": "Wake window (minutes)"
-        }
+        "person_id": { "name": "Person ID" },
+        "rules": { "name": "Rules list" }
       }
     },
     "set_special_rules": {
       "name": "Set special rules",
-      "description": "Update holiday behavior and manual holiday dates.",
+      "description": "Update holiday behaviour and manual holiday dates.",
       "fields": {
-        "holiday_behavior": {
-          "name": "Holiday behavior"
-        },
-        "manual_holiday_dates": {
-          "name": "Manual holiday dates"
-        }
+        "holiday_behavior": { "name": "Holiday behaviour" },
+        "manual_holiday_dates": { "name": "Manual holiday dates" }
       }
     }
   },
@@ -326,7 +111,7 @@
     "holiday_behavior": {
       "options": {
         "skip": "Skip wake",
-        "weekend_profile": "Use weekend profile"
+        "weekend_profile": "Use weekend (Saturday) rule"
       }
     }
   }
