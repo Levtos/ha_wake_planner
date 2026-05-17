@@ -40,6 +40,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.services.async_remove(DOMAIN, "set_override")
             hass.services.async_remove(DOMAIN, "clear_override")
             hass.services.async_remove(DOMAIN, "log_sleep")
+            hass.services.async_remove(DOMAIN, "set_weekly_profile")
+            hass.services.async_remove(DOMAIN, "set_sleep_settings")
+            hass.services.async_remove(DOMAIN, "set_special_rules")
     return unload_ok
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:

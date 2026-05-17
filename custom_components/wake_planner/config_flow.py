@@ -126,12 +126,33 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
                 if not self._calendar_configured:
                     return await self.async_step_calendar()
-                return await self.async_step_weekly_profile()
+                return await self._complete_current_person()
         return self.async_show_form(
             step_id="person",
             data_schema=_person_schema(entity_ids=self._entity_ids("person")),
             errors=errors,
         )
+
+    def _apply_person_defaults(self) -> None:
+        """Apply default weekly profile and sleep settings when wizard steps are skipped."""
+        if CONF_WEEKLY_PROFILE not in self._person:
+            self._person[CONF_WEEKLY_PROFILE] = {
+                day: {"active": day not in ("saturday", "sunday"), "wake_time": DEFAULT_WAKE_TIME}
+                for day in DAYS
+            }
+        self._person.setdefault(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)
+        self._person.setdefault(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)
+
+    async def _complete_current_person(self):
+        """Apply defaults, append person to list, proceed to more-people step."""
+        self._apply_person_defaults()
+        if not self._special_rules_configured:
+            self._settings.setdefault(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)
+            self._special_rules_configured = True
+        self._persons.append(self._person)
+        self._shift_slots = []
+        self._shift_slot_index = 0
+        return await self.async_step_more_people()
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
         """Configure optional calendar sources."""
@@ -139,7 +160,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._settings.update(_clean_calendar_input(user_input))
             self._calendar_configured = True
-            return await self.async_step_weekly_profile()
+            return await self._complete_current_person()
         return self.async_show_form(
             step_id="calendar",
             data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),

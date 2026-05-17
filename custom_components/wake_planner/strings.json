@@ -279,6 +279,47 @@
           "name": "Wake time"
         }
       }
+    },
+    "set_weekly_profile": {
+      "name": "Set weekly profile",
+      "description": "Update a person's weekly wake schedule.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID",
+          "description": "Wake Planner person slug."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Dict with day names as keys, each containing active (bool) and wake_time (HH:MM)."
+        }
+      }
+    },
+    "set_sleep_settings": {
+      "name": "Set sleep settings",
+      "description": "Update target sleep duration and wake window.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID"
+        },
+        "target_sleep_hours": {
+          "name": "Target sleep hours"
+        },
+        "wake_window_minutes": {
+          "name": "Wake window (minutes)"
+        }
+      }
+    },
+    "set_special_rules": {
+      "name": "Set special rules",
+      "description": "Update holiday behavior and manual holiday dates.",
+      "fields": {
+        "holiday_behavior": {
+          "name": "Holiday behavior"
+        },
+        "manual_holiday_dates": {
+          "name": "Manual holiday dates"
+        }
+      }
     }
   },
   "selector": {

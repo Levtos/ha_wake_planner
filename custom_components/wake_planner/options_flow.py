@@ -117,7 +117,10 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         person = self._persons[self._index]
         if user_input is not None:
             person.update({key: value or None for key, value in user_input.items()})
-            return await self.async_step_weekly_profile()
+            self._index += 1
+            if self._index < len(self._persons):
+                return await self.async_step_person()
+            return self._async_finish_options()
         return self.async_show_form(
             step_id="person",
             data_schema=_person_schema(person, self._entity_ids("person")),

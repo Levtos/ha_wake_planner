@@ -292,6 +292,25 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                             day,
                         )
 
+    async def async_update_person_config(self, person_id: str, **updates: Any) -> None:
+        """Update a person's stored configuration in the config entry and reload."""
+        all_opts = {**self.entry.data, **self.entry.options}
+        persons = [dict(p) for p in all_opts.get(CONF_PERSONS, [])]
+        for i, p in enumerate(persons):
+            if p.get(CONF_SLUG) == person_id:
+                persons[i] = {**p, **updates}
+                break
+        new_options = {**self.entry.options, CONF_PERSONS: persons}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self.persons = persons_from_entry(self.entry)
+        await self.async_request_refresh()
+
+    async def async_update_global_config(self, **updates: Any) -> None:
+        """Update global (non-person) options in the config entry and reload."""
+        new_options = {**self.entry.options, **updates}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        await self.async_request_refresh()
+
     def _runtime_for(self, person_id: str) -> RuntimePersonState:
         if person_id not in {person.slug for person in self.persons}:
             raise ValueError(f"Unknown Wake Planner person_id: {person_id}")

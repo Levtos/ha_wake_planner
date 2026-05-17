@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, PersonConfig
+from .const import CONF_HOLIDAY_BEHAVIOR, CONF_MANUAL_HOLIDAY_DATES, DOMAIN, HOLIDAY_SKIP, PersonConfig
 from .coordinator import WakePlannerCoordinator
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
@@ -70,4 +70,33 @@ class WakePlannerSensor(CoordinatorEntity[WakePlannerCoordinator], SensorEntity)
         attrs["person_id"] = self.person.slug
         if self.entity_description.key == "sleep_duration_avg":
             attrs["sleep_log_count"] = len(self.coordinator.runtime_states.get(self.person.slug, {}).sleep_log) if self.person.slug in self.coordinator.runtime_states else 0
+        if self.entity_description.key == "wake_state":
+            attrs["weekly_profile"] = {
+                day: {
+                    "active": profile.active,
+                    "wake_time": profile.wake_time.strftime("%H:%M"),
+                }
+                for day, profile in self.person.weekly_profile.items()
+            }
+            attrs["wake_window_minutes"] = self.person.wake_window_minutes
+            if self.person.shift_cycle:
+                attrs["shift_cycle"] = {
+                    "anchor_date": self.person.shift_cycle.anchor_date.isoformat(),
+                    "slots": [
+                        {
+                            "name": slot.name,
+                            "duration_days": slot.duration_days,
+                            "weekly_profile": {
+                                d: {"active": p.active, "wake_time": p.wake_time.strftime("%H:%M")}
+                                for d, p in slot.weekly_profile.items()
+                            },
+                        }
+                        for slot in self.person.shift_cycle.slots
+                    ],
+                }
+            else:
+                attrs["shift_cycle"] = None
+            opts = self.coordinator.options
+            attrs["holiday_behavior"] = opts.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)
+            attrs["manual_holiday_dates"] = opts.get(CONF_MANUAL_HOLIDAY_DATES, "")
         return attrs
