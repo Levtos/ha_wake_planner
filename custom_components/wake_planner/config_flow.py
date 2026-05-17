@@ -32,6 +32,7 @@ from .const import (
     CONF_TARGET_SLEEP_HOURS,
     CONF_WAKE_WINDOW_MINUTES,
     CONF_WEEKLY_PROFILE,
+    CONF_WRITE_CALENDAR_ENTITY_ID,
     DAYS,
     DEFAULT_TARGET_SLEEP_HOURS,
     DEFAULT_WAKE_TIME,
@@ -61,6 +62,7 @@ CONF_NUM_SHIFT_SLOTS = "num_slots"
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+    CONF_WRITE_CALENDAR_ENTITY_ID,
 }
 SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
@@ -150,7 +152,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
         """Log config flow progress so UI 500s leave a backend breadcrumb."""
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Wake Planner config flow step=%s submitted=%s persons=%s settings=%s",
             step_id,
             user_input is not None,
@@ -400,6 +402,7 @@ def _calendar_schema(
     defaults = defaults or {}
     calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
     holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
+    write_entity = defaults.get(CONF_WRITE_CALENDAR_ENTITY_ID)
     return vol.Schema({
         vol.Optional(
             CONF_CALENDAR_ENTITY_ID,
@@ -409,6 +412,10 @@ def _calendar_schema(
             CONF_HOLIDAY_CALENDAR_ENTITY_ID,
             default=holiday_entity or "",
         ): _entity_select(entity_ids, holiday_entity),
+        vol.Optional(
+            CONF_WRITE_CALENDAR_ENTITY_ID,
+            default=write_entity or "",
+        ): _entity_select(entity_ids, write_entity),
     })
 
 def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:

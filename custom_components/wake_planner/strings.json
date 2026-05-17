@@ -15,7 +15,8 @@
         "description": "Calendars are optional. Use calendars already added in Home Assistant. The holiday calendar is evaluated by all-day events.",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar"
+          "holiday_calendar_entity_id": "Holiday/vacation calendar",
+          "write_calendar_entity_id": "Write wake events to calendar"
         }
       },
       "weekly_profile": {
@@ -113,7 +114,8 @@
         "title": "Edit calendars",
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar"
+          "holiday_calendar_entity_id": "Holiday/vacation calendar",
+          "write_calendar_entity_id": "Write wake events to calendar"
         }
       },
       "person": {
