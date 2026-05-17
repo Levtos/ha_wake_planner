@@ -59,7 +59,6 @@ def _serialise_state(coordinator: WakePlannerCoordinator) -> dict[str, Any]:
             "manual_holiday_dates": opts.get(CONF_MANUAL_HOLIDAY_DATES, ""),
             "calendar_entity_id": opts.get("calendar_entity_id"),
             "holiday_calendar_entity_id": opts.get("holiday_calendar_entity_id"),
-            "write_to_calendar": bool(opts.get("write_to_calendar")),
         },
     }
 
@@ -157,7 +156,6 @@ async def ws_set_rules(hass, connection, msg):
     vol.Optional("manual_holiday_dates"): str,
     vol.Optional("calendar_entity_id"): vol.Any(str, None),
     vol.Optional("holiday_calendar_entity_id"): vol.Any(str, None),
-    vol.Optional("write_to_calendar"): bool,
 })
 @websocket_api.async_response
 async def ws_set_global(hass, connection, msg):
@@ -165,7 +163,7 @@ async def ws_set_global(hass, connection, msg):
     if not coordinator:
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
-    fields = {"holiday_behavior", "manual_holiday_dates", "calendar_entity_id", "holiday_calendar_entity_id", "write_to_calendar"}
+    fields = {"holiday_behavior", "manual_holiday_dates", "calendar_entity_id", "holiday_calendar_entity_id"}
     updates = {k: v for k, v in msg.items() if k in fields}
     # Drop empty strings for entity ids so they go back to "not configured"
     for entity_key in ("calendar_entity_id", "holiday_calendar_entity_id"):

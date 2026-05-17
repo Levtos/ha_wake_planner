@@ -23,7 +23,6 @@ CONF_MANUAL_HOLIDAY_DATES = "manual_holiday_dates"
 CONF_CALENDAR_ENTITY_ID = "calendar_entity_id"
 CONF_CALENDAR_WAKE_PATTERN = "calendar_wake_pattern"
 CONF_CALENDAR_SKIP_TITLES = "calendar_skip_titles"
-CONF_WRITE_TO_CALENDAR = "write_to_calendar"
 
 DEFAULT_WAKE_TIME = "07:00"
 DEFAULT_WAKE_WINDOW_MINUTES = 5

@@ -7,8 +7,7 @@
         "description": "Pick the calendars Wake Planner should read (both optional — you can add them later in Settings). People and rules are managed in the Wake Planner sidebar panel after setup.",
         "data": {
           "calendar_entity_id": "Wake calendar (events like 'wake: 06:30' override that day)",
-          "holiday_calendar_entity_id": "Holiday/vacation calendar (all-day events)",
-          "write_to_calendar": "Write planned wake events into the wake calendar"
+          "holiday_calendar_entity_id": "Holiday/vacation calendar (all-day events)"
         }
       }
     },
@@ -22,8 +21,7 @@
         "title": "Calendars",
         "data": {
           "calendar_entity_id": "Wake calendar",
-          "holiday_calendar_entity_id": "Holiday calendar",
-          "write_to_calendar": "Write wake events into the wake calendar"
+          "holiday_calendar_entity_id": "Holiday calendar"
         }
       },
       "special_rules": {

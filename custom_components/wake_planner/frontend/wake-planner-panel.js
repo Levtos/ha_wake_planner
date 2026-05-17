@@ -492,10 +492,7 @@ class WakePlannerPanel extends HTMLElement {
             </select>
           </label>
         </div>
-        <label class="row" style="margin-top:10px">
-          <input type="checkbox" ${g.write_to_calendar ? "checked" : ""} data-global-field="write_to_calendar">
-          Write planned wake events into the wake calendar
-        </label>
+        <p class="muted" style="margin-top:8px">Wake Planner only <b>reads</b> from the wake calendar — no events are written back. To change a wake time on a specific day, use the Override button on the Today tab or add a calendar event with a title like <code>wake: 06:30</code>.</p>
       </section>
       <section class="settings-section">
         <h3>Weekends &amp; holidays</h3>

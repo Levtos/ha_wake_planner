@@ -17,7 +17,6 @@ from .const import (
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_MANUAL_HOLIDAY_DATES,
     CONF_PERSONS,
-    CONF_WRITE_TO_CALENDAR,
     DOMAIN,
     HOLIDAY_SKIP,
     HOLIDAY_WEEKEND_PROFILE,
@@ -28,7 +27,6 @@ _LOGGER = logging.getLogger(__name__)
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-    CONF_WRITE_TO_CALENDAR,
 }
 SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
@@ -95,7 +93,6 @@ def _calendar_schema(entity_ids: list[str] | None = None, defaults: dict[str, An
     return vol.Schema({
         vol.Optional(CONF_CALENDAR_ENTITY_ID, default=cal or ""): _entity_select(entity_ids, cal),
         vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=hol or ""): _entity_select(entity_ids, hol),
-        vol.Optional(CONF_WRITE_TO_CALENDAR, default=bool(defaults.get(CONF_WRITE_TO_CALENDAR))): selector.BooleanSelector(),
     })
 
 
