@@ -132,6 +132,9 @@ class WakePlannerPanel extends HTMLElement {
         .info-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:600; background:var(--secondary-background-color); margin:2px; }
         .empty { padding:24px; }
         svg { width:100%; height:120px; }
+        .settings-section { margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--divider-color); }
+        .settings-section:last-child { border-bottom:0; margin-bottom:0; padding-bottom:0; }
+        .save-btn { background:var(--primary-color); color:var(--text-primary-color,#fff); border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; }
         @media (max-width:720px) { :host { padding:8px; } }
       </style>
       <div class="tabs">
@@ -143,6 +146,69 @@ class WakePlannerPanel extends HTMLElement {
     this.querySelectorAll('[data-override]').forEach((el) => el.addEventListener('click', () => this._override(el.dataset.override)));
     this.querySelectorAll('[data-log-sleep]').forEach((el) => el.addEventListener('click', () => this._logSleep(el.dataset.logSleep)));
     this.querySelectorAll('[data-options]').forEach((el) => el.addEventListener('click', () => history.pushState(null, '', '/config/integrations')));
+
+    // Save weekly profile
+    this.querySelectorAll('[data-save-profile]').forEach((el) => el.addEventListener('click', async () => {
+      const slug = el.dataset.saveProfile;
+      const profile = {};
+      ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].forEach((day) => {
+        const activeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="active"]`);
+        const timeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="time"]`);
+        profile[day] = { active: activeEl?.checked ?? false, wake_time: timeEl?.value ?? '07:00' };
+      });
+      try {
+        await this._hass.callService('wake_planner', 'set_weekly_profile', { person_id: slug, profile });
+        el.textContent = '✓ Saved';
+        setTimeout(() => { el.textContent = '💾 Save weekly profile'; }, 2000);
+      } catch (e) {
+        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save weekly profile'; }, 3000);
+      }
+    }));
+
+    // Apply global time to all active days
+    this.querySelectorAll('[data-apply-global]').forEach((el) => el.addEventListener('click', () => {
+      const slug = el.dataset.applyGlobal;
+      const globalTimeEl = this.querySelector(`[data-person="${slug}"][data-type="global-time"]`);
+      const globalTime = globalTimeEl?.value;
+      if (!globalTime) return;
+      ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].forEach((day) => {
+        const activeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="active"]`);
+        const timeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="time"]`);
+        if (activeEl?.checked && timeEl) timeEl.value = globalTime;
+      });
+    }));
+
+    // Save sleep settings
+    this.querySelectorAll('[data-save-sleep]').forEach((el) => el.addEventListener('click', async () => {
+      const slug = el.dataset.saveSleep;
+      const hoursEl = this.querySelector(`[data-person="${slug}"][data-type="sleep-hours"]`);
+      const windowEl = this.querySelector(`[data-person="${slug}"][data-type="wake-window"]`);
+      try {
+        await this._hass.callService('wake_planner', 'set_sleep_settings', {
+          person_id: slug,
+          target_sleep_hours: parseFloat(hoursEl?.value || 7.5),
+          wake_window_minutes: parseInt(windowEl?.value || 5),
+        });
+        el.textContent = '✓ Saved'; setTimeout(() => { el.textContent = '💾 Save sleep settings'; }, 2000);
+      } catch (e) {
+        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save sleep settings'; }, 3000);
+      }
+    }));
+
+    // Save special rules (shown on settings tab)
+    this.querySelectorAll('[data-save-rules]').forEach((el) => el.addEventListener('click', async () => {
+      const behaviorEl = this.querySelector('[data-type="holiday-behavior"]');
+      const datesEl = this.querySelector('[data-type="manual-dates"]');
+      try {
+        await this._hass.callService('wake_planner', 'set_special_rules', {
+          holiday_behavior: behaviorEl?.value || 'skip',
+          manual_holiday_dates: datesEl?.value || '',
+        });
+        el.textContent = '✓ Saved'; setTimeout(() => { el.textContent = '💾 Save special rules'; }, 2000);
+      } catch (e) {
+        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save special rules'; }, 3000);
+      }
+    }));
   }
 
   _renderPerson({ entityId, state }) {
@@ -264,20 +330,86 @@ class WakePlannerPanel extends HTMLElement {
   }
 
   _renderSettings(slug, name, state) {
-    const decidedBy = state.attributes.decided_by || '—';
-    const shiftActive = decidedBy === 'shift_cycle';
-    const profileDay = state.attributes.profile_day || '—';
+    const wp = state.attributes.weekly_profile || {};
+    const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+    const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+    const profileRows = DAYS.map((day, i) => {
+      const dp = wp[day] || {active: i < 5, wake_time: '07:00'};
+      const checked = dp.active ? 'checked' : '';
+      return `<tr>
+          <td style="font-weight:600;padding:6px 10px 6px 0">${DAY_LABELS[i]}</td>
+          <td style="padding:4px 10px"><input type="checkbox" data-person="${slug}" data-day="${day}" data-type="active" ${checked} style="width:18px;height:18px;cursor:pointer"></td>
+          <td style="padding:4px 0"><input type="time" data-person="${slug}" data-day="${day}" data-type="time" value="${dp.wake_time}" style="padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"></td>
+      </tr>`;
+    }).join('');
+
+    const sleepHours = state.attributes.target_sleep_hours || 7.5;
+    const wakeWindow = state.attributes.wake_window_minutes || 5;
+    const holidayBehavior = state.attributes.holiday_behavior || 'skip';
+    const manualDates = state.attributes.manual_holiday_dates || '';
+
     return `<ha-card>
-      <h2 style="margin:0 0 12px">${name}</h2>
-      <p><b>Current decision source:</b> ${decidedBy}</p>
-      <p><b>Profile day:</b> ${profileDay}</p>
-      ${shiftActive ? `<p><b>Shift active:</b> ${state.attributes.reason || '—'}</p>` : ''}
-      <p><b>Holiday/weekend:</b> ${state.attributes.holiday_name || 'none'}</p>
-      <p><b>Override until:</b> ${state.attributes.override_until || 'none'}</p>
-      <div class="actions">
-        <button data-options="1">Edit configuration</button>
-      </div>
-      <p style="font-size:12px;opacity:.6;margin-top:12px">To change shift cycles, weekly profiles, or calendars, click "Edit configuration" to open the integration options.</p>
+        <h2 style="margin:0 0 20px">${name}</h2>
+
+        <div class="settings-section">
+            <h3 style="margin:0 0 4px;font-size:15px">Weekly Profile</h3>
+            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Configure which days Wake Planner is active and the wake time for each.</p>
+            <div style="margin-bottom:10px">
+                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+                    <span style="opacity:.7">Set all active days to:</span>
+                    <input type="time" data-person="${slug}" data-type="global-time" style="padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px">
+                    <button data-apply-global="${slug}" style="padding:5px 10px;font-size:12px">Apply</button>
+                </label>
+            </div>
+            <table style="border-collapse:collapse;width:100%"><tbody>${profileRows}</tbody></table>
+            <div style="margin-top:12px">
+                <button data-save-profile="${slug}" class="save-btn">💾 Save weekly profile</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 style="margin:0 0 4px;font-size:15px">Sleep Settings</h3>
+            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Target sleep duration determines the suggested bedtime. Wake window controls how long before the wake time the "wake needed" sensor activates.</p>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+                    Target sleep:
+                    <input type="number" min="4" max="12" step="0.5" value="${sleepHours}" data-person="${slug}" data-type="sleep-hours" style="width:60px;padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"> h
+                </label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+                    Wake window:
+                    <input type="number" min="1" max="60" value="${wakeWindow}" data-person="${slug}" data-type="wake-window" style="width:60px;padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"> min
+                </label>
+            </div>
+            <div style="margin-top:12px">
+                <button data-save-sleep="${slug}" class="save-btn">💾 Save sleep settings</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 style="margin:0 0 4px;font-size:15px">Special Rules</h3>
+            <p style="font-size:12px;opacity:.65;margin:0 0 12px">These settings apply to all persons.</p>
+            <label style="font-size:13px;display:block;margin-bottom:10px">
+                Weekend / Holiday behavior:<br>
+                <select data-type="holiday-behavior" style="margin-top:6px;padding:8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px;width:100%">
+                    <option value="skip" ${holidayBehavior === 'skip' ? 'selected' : ''}>Skip wake</option>
+                    <option value="weekend_profile" ${holidayBehavior === 'weekend_profile' ? 'selected' : ''}>Use weekend profile</option>
+                </select>
+            </label>
+            <label style="font-size:13px;display:block">
+                Manual holiday/vacation dates (comma-separated, e.g. 2025-12-25, 12-26, 2025-07-01..2025-07-14):<br>
+                <input type="text" data-type="manual-dates" value="${manualDates}" placeholder="YYYY-MM-DD, MM-DD, YYYY-MM-DD..YYYY-MM-DD" style="margin-top:6px;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px">
+            </label>
+            <div style="margin-top:12px">
+                <button data-save-rules="1" class="save-btn">💾 Save special rules</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 style="margin:0 0 4px;font-size:15px">Advanced / Shift Cycle</h3>
+            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Shift cycle and calendar settings are configured via the integration options.</p>
+            <button data-options="1">Open integration options</button>
+        </div>
     </ha-card>`;
   }
 }
