@@ -16,13 +16,14 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_calendar_entity_id": "Write wake events to calendar"
+          "write_to_calendar": "Write wake events to the configured calendar"
         }
       },
       "weekly_profile": {
         "title": "Weekly plan",
-        "description": "Configure active days and wake times.",
+        "description": "Set a global wake time to apply to all active days at once, or configure each day individually.",
         "data": {
+          "global_wake_time": "Global wake time (HH:MM, applies to all active days)",
           "mon_active": "Mon active",
           "mon_wake_time": "Mon – Wake time",
           "tue_active": "Tue active",
@@ -115,7 +116,7 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_calendar_entity_id": "Write wake events to calendar"
+          "write_to_calendar": "Write wake events to the configured calendar"
         }
       },
       "person": {
@@ -127,7 +128,9 @@
       },
       "weekly_profile": {
         "title": "Edit weekly plan",
+        "description": "Set a global wake time to apply to all active days at once, or configure each day individually.",
         "data": {
+          "global_wake_time": "Global wake time (HH:MM, applies to all active days)",
           "mon_active": "Mon active",
           "mon_wake_time": "Mon – Wake time",
           "tue_active": "Tue active",
@@ -274,6 +277,47 @@
         },
         "wake_time": {
           "name": "Wake time"
+        }
+      }
+    },
+    "set_weekly_profile": {
+      "name": "Set weekly profile",
+      "description": "Update a person's weekly wake schedule.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID",
+          "description": "Wake Planner person slug."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Dict with day names as keys, each containing active (bool) and wake_time (HH:MM)."
+        }
+      }
+    },
+    "set_sleep_settings": {
+      "name": "Set sleep settings",
+      "description": "Update target sleep duration and wake window.",
+      "fields": {
+        "person_id": {
+          "name": "Person ID"
+        },
+        "target_sleep_hours": {
+          "name": "Target sleep hours"
+        },
+        "wake_window_minutes": {
+          "name": "Wake window (minutes)"
+        }
+      }
+    },
+    "set_special_rules": {
+      "name": "Set special rules",
+      "description": "Update holiday behavior and manual holiday dates.",
+      "fields": {
+        "holiday_behavior": {
+          "name": "Holiday behavior"
+        },
+        "manual_holiday_dates": {
+          "name": "Manual holiday dates"
         }
       }
     }

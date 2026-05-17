@@ -16,13 +16,14 @@
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
+          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
         }
       },
       "weekly_profile": {
         "title": "Wochenplan",
-        "description": "Aktive Tage und Weckzeiten konfigurieren.",
+        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
         "data": {
+          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
           "mon_active": "Mo aktiv",
           "mon_wake_time": "Mo – Weckzeit",
           "tue_active": "Di aktiv",
@@ -115,7 +116,7 @@
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
+          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
         }
       },
       "person": {
@@ -127,7 +128,9 @@
       },
       "weekly_profile": {
         "title": "Wochenplan bearbeiten",
+        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
         "data": {
+          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
           "mon_active": "Mo aktiv",
           "mon_wake_time": "Mo – Weckzeit",
           "tue_active": "Di aktiv",
@@ -274,6 +277,47 @@
         },
         "wake_time": {
           "name": "Weckzeit"
+        }
+      }
+    },
+    "set_weekly_profile": {
+      "name": "Wochenplan setzen",
+      "description": "Aktualisiert den wöchentlichen Weckplan einer Person.",
+      "fields": {
+        "person_id": {
+          "name": "Personen-ID",
+          "description": "Wake-Planner-Personenkennung."
+        },
+        "profile": {
+          "name": "Profil",
+          "description": "Dict mit Tagesnamen als Schlüssel, jeweils mit active (bool) und wake_time (HH:MM)."
+        }
+      }
+    },
+    "set_sleep_settings": {
+      "name": "Schlafeinstellungen setzen",
+      "description": "Aktualisiert Ziel-Schlafdauer und Weckfenster.",
+      "fields": {
+        "person_id": {
+          "name": "Personen-ID"
+        },
+        "target_sleep_hours": {
+          "name": "Ziel-Schlafdauer (h)"
+        },
+        "wake_window_minutes": {
+          "name": "Weckfenster (Minuten)"
+        }
+      }
+    },
+    "set_special_rules": {
+      "name": "Sonderregeln setzen",
+      "description": "Aktualisiert Feiertagsverhalten und manuelle Feiertagsdaten.",
+      "fields": {
+        "holiday_behavior": {
+          "name": "Feiertagsverhalten"
+        },
+        "manual_holiday_dates": {
+          "name": "Manuelle Feiertagsdaten"
         }
       }
     }

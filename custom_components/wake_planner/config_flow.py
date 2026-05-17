@@ -33,6 +33,7 @@ from .const import (
     CONF_WAKE_WINDOW_MINUTES,
     CONF_WEEKLY_PROFILE,
     CONF_WRITE_CALENDAR_ENTITY_ID,
+    CONF_WRITE_TO_CALENDAR,
     DAYS,
     DEFAULT_TARGET_SLEEP_HOURS,
     DEFAULT_WAKE_TIME,
@@ -62,7 +63,8 @@ CONF_NUM_SHIFT_SLOTS = "num_slots"
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-    CONF_WRITE_CALENDAR_ENTITY_ID,
+    CONF_WRITE_TO_CALENDAR,
+    CONF_WRITE_CALENDAR_ENTITY_ID,  # kept so old entries are cleaned up on save
 }
 SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
@@ -105,7 +107,12 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._log_step("person", user_input)
         errors: dict[str, str] = {}
         if user_input is not None:
-            name = user_input[CONF_PERSON_NAME].strip()
+            name = user_input.get(CONF_PERSON_NAME, "").strip()
+            entity_id = user_input.get(CONF_PERSON_ENTITY_ID) or ""
+            if not name and entity_id:
+                state = self.hass.states.get(entity_id)
+                name = (state.attributes.get("friendly_name") if state else None) or entity_id.split(".")[-1].replace("_", " ").title()
+                user_input[CONF_PERSON_NAME] = name
             slug = slugify(name)
             if not slug:
                 errors[CONF_PERSON_NAME] = "invalid_name"
@@ -119,12 +126,33 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
                 if not self._calendar_configured:
                     return await self.async_step_calendar()
-                return await self.async_step_weekly_profile()
+                return await self._complete_current_person()
         return self.async_show_form(
             step_id="person",
             data_schema=_person_schema(entity_ids=self._entity_ids("person")),
             errors=errors,
         )
+
+    def _apply_person_defaults(self) -> None:
+        """Apply default weekly profile and sleep settings when wizard steps are skipped."""
+        if CONF_WEEKLY_PROFILE not in self._person:
+            self._person[CONF_WEEKLY_PROFILE] = {
+                day: {"active": day not in ("saturday", "sunday"), "wake_time": DEFAULT_WAKE_TIME}
+                for day in DAYS
+            }
+        self._person.setdefault(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)
+        self._person.setdefault(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)
+
+    async def _complete_current_person(self):
+        """Apply defaults, append person to list, proceed to more-people step."""
+        self._apply_person_defaults()
+        if not self._special_rules_configured:
+            self._settings.setdefault(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)
+            self._special_rules_configured = True
+        self._persons.append(self._person)
+        self._shift_slots = []
+        self._shift_slot_index = 0
+        return await self.async_step_more_people()
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
         """Configure optional calendar sources."""
@@ -132,7 +160,7 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._settings.update(_clean_calendar_input(user_input))
             self._calendar_configured = True
-            return await self.async_step_weekly_profile()
+            return await self._complete_current_person()
         return self.async_show_form(
             step_id="calendar",
             data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),
@@ -213,8 +241,8 @@ class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._log_step("shift_cycle_setup", user_input)
         if user_input is not None:
             if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
-                self._num_shift_slots = int(user_input[CONF_NUM_SHIFT_SLOTS])
-                self._shift_anchor_date = str(user_input[CONF_SHIFT_ANCHOR_DATE]).strip()
+                self._num_shift_slots = int(user_input.get(CONF_NUM_SHIFT_SLOTS) or 1)
+                self._shift_anchor_date = str(user_input.get(CONF_SHIFT_ANCHOR_DATE) or "").strip()
                 self._shift_slots = []
                 self._shift_slot_index = 0
                 return await self.async_step_shift_slot()
@@ -350,7 +378,11 @@ def _person_schema(
 
 def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or default_weekly_profile()
-    fields: dict[Any, Any] = {}
+    fields: dict[Any, Any] = {
+        vol.Optional("global_wake_time", default=""): selector.TextSelector(
+            selector.TextSelectorConfig(placeholder="HH:MM – applies to all active days")
+        ),
+    }
     for day in DAYS:
         prefix = DAY_FIELDS[day]
         active_key = vol.Required(
@@ -402,7 +434,12 @@ def _calendar_schema(
     defaults = defaults or {}
     calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
     holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
-    write_entity = defaults.get(CONF_WRITE_CALENDAR_ENTITY_ID)
+    # write_to_calendar replaces the old per-entity selector — use the same
+    # calendar that's already configured for reading
+    write_to_cal = bool(
+        defaults.get(CONF_WRITE_TO_CALENDAR)
+        or defaults.get(CONF_WRITE_CALENDAR_ENTITY_ID)  # migrate old config
+    )
     return vol.Schema({
         vol.Optional(
             CONF_CALENDAR_ENTITY_ID,
@@ -413,9 +450,9 @@ def _calendar_schema(
             default=holiday_entity or "",
         ): _entity_select(entity_ids, holiday_entity),
         vol.Optional(
-            CONF_WRITE_CALENDAR_ENTITY_ID,
-            default=write_entity or "",
-        ): _entity_select(entity_ids, write_entity),
+            CONF_WRITE_TO_CALENDAR,
+            default=write_to_cal,
+        ): selector.BooleanSelector(),
     })
 
 def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -441,14 +478,15 @@ def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 def _shift_cycle_setup_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     enabled = bool(defaults.get(CONF_SHIFT_SLOTS))
-    num_slots = max(2, len(defaults.get(CONF_SHIFT_SLOTS) or []))
+    num_slots = max(1, len(defaults.get(CONF_SHIFT_SLOTS) or []))
     anchor = defaults.get(CONF_SHIFT_ANCHOR_DATE, "")
     return vol.Schema({
         vol.Required(CONF_ENABLE_SHIFT_CYCLE, default=enabled): selector.BooleanSelector(),
-        vol.Required(CONF_NUM_SHIFT_SLOTS, default=num_slots): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=2, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
+        # Optional so the form can be submitted without filling these when toggle is OFF
+        vol.Optional(CONF_NUM_SHIFT_SLOTS, default=num_slots): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
         ),
-        vol.Required(CONF_SHIFT_ANCHOR_DATE, default=anchor): selector.TextSelector(),
+        vol.Optional(CONF_SHIFT_ANCHOR_DATE, default=anchor): selector.TextSelector(),
     })
 
 
@@ -484,13 +522,15 @@ def _clean_special_rules_input(user_input: dict[str, Any]) -> dict[str, Any]:
 
 def _weekly_from_input(user_input: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Convert compact day field names into the stored weekly profile format."""
-    return {
-        day: {
-            "active": bool(user_input[f"{prefix}_active"]),
-            "wake_time": _validate_time(user_input[f"{prefix}_wake_time"]),
-        }
-        for day, prefix in DAY_FIELDS.items()
-    }
+    global_time = (user_input.get("global_wake_time") or "").strip()
+    if global_time:
+        _validate_time(global_time)  # raise ValueError early if malformed
+    result = {}
+    for day, prefix in DAY_FIELDS.items():
+        active = bool(user_input[f"{prefix}_active"])
+        wake_str = global_time if (global_time and active) else user_input[f"{prefix}_wake_time"]
+        result[day] = {"active": active, "wake_time": _validate_time(wake_str)}
+    return result
 
 
 def _validate_time(value: str) -> str:

@@ -27,6 +27,7 @@ from .const import (
     CONF_SLUG,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_WRITE_CALENDAR_ENTITY_ID,
+    CONF_WRITE_TO_CALENDAR,
     DAYS,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
@@ -201,7 +202,12 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
 
     async def async_write_calendar_events(self) -> None:
         """Write planned wake events to the configured write calendar for the next 14 days."""
-        write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
+        # New boolean flag: write to the same calendar configured for reading
+        if self.options.get(CONF_WRITE_TO_CALENDAR):
+            write_entity_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
+        else:
+            # Legacy: separate write-calendar entity selector
+            write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
         if not write_entity_id:
             return
         now = dt_util.now()
@@ -285,6 +291,25 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                             person.slug,
                             day,
                         )
+
+    async def async_update_person_config(self, person_id: str, **updates: Any) -> None:
+        """Update a person's stored configuration in the config entry and reload."""
+        all_opts = {**self.entry.data, **self.entry.options}
+        persons = [dict(p) for p in all_opts.get(CONF_PERSONS, [])]
+        for i, p in enumerate(persons):
+            if p.get(CONF_SLUG) == person_id:
+                persons[i] = {**p, **updates}
+                break
+        new_options = {**self.entry.options, CONF_PERSONS: persons}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self.persons = persons_from_entry(self.entry)
+        await self.async_request_refresh()
+
+    async def async_update_global_config(self, **updates: Any) -> None:
+        """Update global (non-person) options in the config entry and reload."""
+        new_options = {**self.entry.options, **updates}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        await self.async_request_refresh()
 
     def _runtime_for(self, person_id: str) -> RuntimePersonState:
         if person_id not in {person.slug for person in self.persons}:
