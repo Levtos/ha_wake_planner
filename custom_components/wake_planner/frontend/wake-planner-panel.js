@@ -98,8 +98,10 @@ class WakePlannerPanel extends HTMLElement {
     const wasHass = !!this._hass;
     this._hass = hass;
     if (!wasHass) this._initialFetch();
-    // Lazy re-render on subsequent hass updates without re-fetching everything
-    if (this._loaded) this._renderShell();
+    // Intentionally no re-render on every hass tick: HA pushes state updates
+    // many times per second, which would steal focus from inputs the user is
+    // typing into. The panel re-renders only after its own actions
+    // (_ws / _refresh / tab switch).
   }
 
   connectedCallback() {
@@ -319,27 +321,47 @@ class WakePlannerPanel extends HTMLElement {
     const list = persons.length
       ? persons.map(p => this._renderPersonCard(p)).join("")
       : `<div class="card empty"><p>No persons yet. Add the first one to get started.</p></div>`;
+    const personOptions = this._personEntityOptions();
     return `${list}
       <ha-card>
         <h2>Add person</h2>
-        <div class="row" style="margin-top:8px">
-          <input type="text" id="add-name" placeholder="Name" style="flex:1;min-width:160px">
+        <div class="row" style="margin-top:8px;align-items:flex-end">
+          <label class="field" style="flex:1;min-width:160px"><span class="label">Name</span>
+            <input type="text" id="add-name" placeholder="e.g. Benni">
+          </label>
+          <label class="field" style="flex:1;min-width:200px"><span class="label">Link to HA person (optional)</span>
+            <select id="add-person-entity">
+              <option value="">— none —</option>
+              ${personOptions.map(o => `<option value="${o.id}">${escapeHtml(o.name)} (${o.id})</option>`).join("")}
+            </select>
+          </label>
           <button class="btn primary" data-action="add-person">Add</button>
         </div>
-        <p class="muted" style="margin-top:8px">A default weekday-mornings rule (Mon–Fri 07:00) is created automatically. You can edit or delete it afterwards.</p>
+        <p class="muted" style="margin-top:8px">A default weekday-mornings rule (Mon–Fri 07:00) is created automatically. The HA person link lets future features (presence-based skip etc.) hook in.</p>
       </ha-card>`;
+  }
+
+  _personEntityOptions() {
+    if (!this._hass) return [];
+    return Object.entries(this._hass.states)
+      .filter(([id]) => id.startsWith("person."))
+      .map(([id, s]) => ({ id, name: s.attributes?.friendly_name || id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   _renderPersonCard(person) {
     const rulesHtml = (person.rules || []).length
       ? (person.rules || []).map((r, idx) => this._renderRule(person.slug, r, idx)).join("")
       : `<p class="muted">No rules yet — without a rule this person will be inactive.</p>`;
+    const linkLabel = person.person_entity_id
+      ? `linked to <code>${escapeHtml(person.person_entity_id)}</code>`
+      : `<span style="opacity:.6">no HA person linked</span>`;
     return `<ha-card data-person-card="${person.slug}">
       <div class="row">
         <h2>${escapeHtml(person.name)}</h2>
-        <span class="muted">slug: ${person.slug}</span>
+        <span class="muted">slug: ${person.slug} · ${linkLabel}</span>
         <span class="space"></span>
-        <button class="btn" data-action="rename-person" data-person="${person.slug}">Rename</button>
+        <button class="btn" data-action="edit-person" data-person="${person.slug}">Edit</button>
         <button class="btn danger" data-action="remove-person" data-person="${person.slug}">Delete</button>
       </div>
       <p class="muted" style="margin:8px 0 12px">Rules are evaluated in priority order (lowest number first). The first matching rule wins.</p>
@@ -517,7 +539,8 @@ class WakePlannerPanel extends HTMLElement {
     else if (action === "add-person") {
       const name = this.querySelector("#add-name")?.value?.trim();
       if (!name) return this._toast("Enter a name", true);
-      await this._ws("wake_planner/add_person", { name });
+      const personEntity = this.querySelector("#add-person-entity")?.value || null;
+      await this._ws("wake_planner/add_person", { name, person_entity_id: personEntity });
       this._tab = "people";
     }
     else if (action === "remove-person") {
@@ -525,7 +548,7 @@ class WakePlannerPanel extends HTMLElement {
       if (!confirm(`Delete ${person?.name || slug}? Rules and runtime state will be lost.`)) return;
       await this._ws("wake_planner/remove_person", { person_id: slug });
     }
-    else if (action === "rename-person") this._openRenameDialog(slug);
+    else if (action === "edit-person") this._openEditPersonDialog(slug);
     else if (action === "add-rule") await this._addRule(slug);
     else if (action === "delete-rule") await this._deleteRule(slug, el.dataset.rule);
     else if (action === "save-rule") await this._saveRule(slug, el.dataset.rule);
@@ -632,16 +655,26 @@ class WakePlannerPanel extends HTMLElement {
     });
   }
 
-  _openRenameDialog(slug) {
+  _openEditPersonDialog(slug) {
     const person = this._state.persons.find(p => p.slug === slug);
-    this._openModal(`Rename ${escapeHtml(person?.name || slug)}`, `
+    const opts = this._personEntityOptions();
+    const currentEntity = person?.person_entity_id || "";
+    this._openModal(`Edit ${escapeHtml(person?.name || slug)}`, `
       <label class="field"><span class="label">Name</span>
-        <input type="text" id="rn-name" value="${escapeHtml(person?.name || "")}">
+        <input type="text" id="ep-name" value="${escapeHtml(person?.name || "")}">
       </label>
+      <label class="field" style="margin-top:12px"><span class="label">Linked HA person</span>
+        <select id="ep-entity">
+          <option value="">— none —</option>
+          ${opts.map(o => `<option value="${o.id}" ${o.id === currentEntity ? "selected" : ""}>${escapeHtml(o.name)} (${o.id})</option>`).join("")}
+        </select>
+      </label>
+      <p class="muted" style="margin-top:8px">Linking is optional and currently informational — the slug stays the same when you rename.</p>
     `, async (modal) => {
-      const name = modal.querySelector("#rn-name").value.trim();
+      const name = modal.querySelector("#ep-name").value.trim();
+      const entity = modal.querySelector("#ep-entity").value || null;
       if (!name) return;
-      await this._ws("wake_planner/update_person", { person_id: slug, name });
+      await this._ws("wake_planner/update_person", { person_id: slug, name, person_entity_id: entity });
     });
   }
 
