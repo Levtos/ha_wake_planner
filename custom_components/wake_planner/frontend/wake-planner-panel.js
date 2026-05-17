@@ -36,12 +36,29 @@ ha-card, .card { display:block; border-radius:16px; padding:16px 18px; backgroun
 .b-calendar { background:#0277bd; color:#fff; }
 .time { font-size:clamp(40px,9vw,60px); font-weight:800; letter-spacing:-0.04em; margin:6px 0 4px; line-height:1; }
 .reason { opacity:.8; font-size:13px; margin:8px 0 12px; }
-button.btn { background:var(--card-background-color); color:var(--primary-text-color); border:1px solid var(--divider-color); border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer; min-height:38px; }
+button.btn { background:var(--card-background-color); color:var(--primary-text-color); border:1px solid var(--divider-color); border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer; min-height:38px; transition:background-color .2s, color .2s, border-color .2s, transform .08s; }
+button.btn:active { transform:scale(0.97); }
 button.btn.primary { background:var(--primary-color); color:var(--text-primary-color,#fff); border-color:transparent; font-weight:600; }
 button.btn.danger { background:#b71c1c; color:#fff; border-color:transparent; }
-button.btn:hover { filter:brightness(1.05); }
+button.btn.state-skip { background:#2e7d32; color:#fff; border-color:transparent; font-weight:600; }
+button.btn.state-override { background:#ef6c00; color:#fff; border-color:transparent; font-weight:600; }
+button.btn.flash-success { animation: wp-flash-success .9s ease-out; }
+button.btn.flash-error { animation: wp-flash-error .9s ease-out; }
+@keyframes wp-flash-success {
+  0%   { background:#2e7d32; color:#fff; box-shadow:0 0 0 0 #2e7d3266; }
+  40%  { background:#2e7d32; color:#fff; box-shadow:0 0 0 12px transparent; }
+  100% { box-shadow:none; }
+}
+@keyframes wp-flash-error {
+  0%, 60% { background:#b71c1c; color:#fff; }
+  100% {}
+}
+button.btn:hover { filter:brightness(1.08); }
 button.icon-btn { background:transparent; border:0; color:inherit; cursor:pointer; padding:6px 8px; border-radius:8px; font-size:16px; }
 button.icon-btn:hover { background:var(--divider-color); }
+.busy { pointer-events:none; opacity:.6; }
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:wp-spin 0.7s linear infinite; vertical-align:-2px; margin-right:6px; }
+@keyframes wp-spin { to { transform:rotate(360deg); } }
 input[type=text], input[type=time], input[type=number], input[type=date], select, textarea {
   background:var(--secondary-background-color); color:var(--primary-text-color);
   border:1px solid var(--divider-color); border-radius:8px; padding:8px 10px; font-size:14px;
@@ -105,7 +122,35 @@ class WakePlannerPanel extends HTMLElement {
   }
 
   connectedCallback() {
+    if (!this._delegated) {
+      this.addEventListener("click", this._onDelegatedClick.bind(this));
+      this.addEventListener("change", this._onDelegatedChange.bind(this));
+      this._delegated = true;
+    }
     if (this._hass && !this._loaded) this._initialFetch();
+  }
+
+  _onDelegatedClick(e) {
+    const tabEl = e.target.closest("[data-tab]");
+    if (tabEl && this.contains(tabEl)) {
+      const tab = tabEl.dataset.tab;
+      if (this._tab !== tab) {
+        this._tab = tab;
+        if (this._tab === "calendar") this._loadCalendarData().then(() => this._renderShell());
+        else this._renderShell();
+      }
+      return;
+    }
+    const actionEl = e.target.closest("[data-action]");
+    if (actionEl && this.contains(actionEl)) this._handleAction(actionEl, e);
+  }
+
+  _onDelegatedChange(e) {
+    // Visual feedback for weekday toggles (no save, just toggling chip color)
+    const wd = e.target.closest("[data-rule-wd]");
+    if (wd && this.contains(wd)) {
+      wd.closest("label").classList.toggle("on", wd.checked);
+    }
   }
 
   async _initialFetch() {
@@ -153,8 +198,38 @@ class WakePlannerPanel extends HTMLElement {
       return null;
     } finally {
       this._busy = false;
-      this._renderShell();
     }
+  }
+
+  _flashSuccess(btn) {
+    if (!btn) return;
+    btn.classList.remove("flash-success");
+    // force reflow to restart the animation
+    void btn.offsetWidth; // eslint-disable-line no-unused-expressions
+    btn.classList.add("flash-success");
+    setTimeout(() => btn.classList.remove("flash-success"), 900);
+  }
+
+  _updateTodayCard(slug) {
+    const person = (this._state?.persons || []).find(p => p.slug === slug);
+    if (!person) return;
+    const old = this.querySelector(`[data-today-card="${slug}"]`);
+    if (!old) return;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = this._renderToday(person);
+    const next = wrap.firstElementChild;
+    if (next) old.replaceWith(next);
+  }
+
+  _updatePersonCard(slug) {
+    const person = (this._state?.persons || []).find(p => p.slug === slug);
+    const old = this.querySelector(`[data-person-card="${slug}"]`);
+    if (!person) { if (old) old.remove(); return; }
+    if (!old) { this._renderShell(); return; }
+    const wrap = document.createElement("div");
+    wrap.innerHTML = this._renderPersonCard(person);
+    const next = wrap.firstElementChild;
+    if (next) old.replaceWith(next);
   }
 
   async _loadCalendarEvents() {
@@ -230,7 +305,6 @@ class WakePlannerPanel extends HTMLElement {
       </div>
       ${body}
     `;
-    this._wireEvents();
   }
 
   _renderToday(person) {
@@ -245,7 +319,10 @@ class WakePlannerPanel extends HTMLElement {
       ? `<div class="muted">Override active: ${person.override_time}${person.override_until ? ` until ${person.override_until}` : ""}</div>`
       : "";
     const skipInfo = person.skip_next ? `<div class="muted">⚠ Next wake will be skipped</div>` : "";
-    return `<ha-card>
+    const skipClass = person.skip_next ? "btn state-skip" : "btn";
+    const overrideClass = person.override_time ? "btn state-override" : "btn";
+    const skipLabel = person.skip_next ? "✓ Skipping next" : "Skip next";
+    return `<ha-card data-today-card="${person.slug}">
       <div class="row">
         <h2>${escapeHtml(person.name)}</h2>
         <span class="space"></span>
@@ -256,8 +333,8 @@ class WakePlannerPanel extends HTMLElement {
       <div class="reason">${escapeHtml(dec.reason || "")}</div>
       ${overrideInfo}${skipInfo}
       <div class="row" style="margin-top:14px">
-        <button class="btn" data-action="skip" data-person="${person.slug}">Skip next</button>
-        <button class="btn" data-action="override" data-person="${person.slug}">Override…</button>
+        <button class="${skipClass}" data-action="skip" data-person="${person.slug}">${skipLabel}</button>
+        <button class="${overrideClass}" data-action="override" data-person="${person.slug}">${person.override_time ? `✓ Override ${person.override_time}` : "Override…"}</button>
         ${person.override_time || person.skip_next ? `<button class="btn" data-action="clear-override" data-person="${person.slug}">Clear</button>` : ""}
       </div>
     </ha-card>`;
@@ -492,10 +569,7 @@ class WakePlannerPanel extends HTMLElement {
             </select>
           </label>
         </div>
-        <label class="row" style="margin-top:10px">
-          <input type="checkbox" ${g.write_to_calendar ? "checked" : ""} data-global-field="write_to_calendar">
-          Write planned wake events into the wake calendar
-        </label>
+        <p class="muted" style="margin-top:8px">Wake Planner only <b>reads</b> from the wake calendar — no events are written back. To change a wake time on a specific day, use the Override button on the Today tab or add a calendar event with a title like <code>wake: 06:30</code>.</p>
       </section>
       <section class="settings-section">
         <h3>Weekends &amp; holidays</h3>
@@ -527,43 +601,39 @@ class WakePlannerPanel extends HTMLElement {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // ---------- Event wiring --------------------------------------------
-
-  _wireEvents() {
-    this.querySelectorAll("[data-tab]").forEach(el =>
-      el.addEventListener("click", () => { this._tab = el.dataset.tab; if (this._tab === "calendar") this._loadCalendarData().then(() => this._renderShell()); else this._renderShell(); })
-    );
-    this.querySelectorAll("[data-action]").forEach(el => el.addEventListener("click", (e) => this._handleAction(el, e)));
-    // Live toggle of weekday chips visually before save
-    this.querySelectorAll(".weekday-toggle input").forEach(input =>
-      input.addEventListener("change", () => input.closest("label").classList.toggle("on", input.checked))
-    );
-  }
+  // ---------- Actions (handled via delegated click) -------------------
 
   async _handleAction(el) {
     const action = el.dataset.action;
     const slug = el.dataset.person;
-    if (action === "skip") await this._ws("wake_planner/skip_next", { person_id: slug });
-    else if (action === "clear-override") await this._ws("wake_planner/clear_override", { person_id: slug });
-    else if (action === "override") this._openOverrideDialog(slug);
+    if (action === "skip") {
+      const ok = await this._ws("wake_planner/skip_next", { person_id: slug });
+      if (ok) { this._updateTodayCard(slug); this._flashSuccess(el); this._toast("Next wake skipped"); }
+    }
+    else if (action === "clear-override") {
+      const ok = await this._ws("wake_planner/clear_override", { person_id: slug });
+      if (ok) { this._updateTodayCard(slug); this._flashSuccess(el); this._toast("Cleared"); }
+    }
+    else if (action === "override") this._openOverrideDialog(slug, el);
     else if (action === "add-person") {
       const name = this.querySelector("#add-name")?.value?.trim();
       if (!name) return this._toast("Enter a name", true);
       const personEntity = this.querySelector("#add-person-entity")?.value || null;
-      await this._ws("wake_planner/add_person", { name, person_entity_id: personEntity });
-      this._tab = "people";
+      const ok = await this._ws("wake_planner/add_person", { name, person_entity_id: personEntity });
+      if (ok) { this._flashSuccess(el); this._renderShell(); }
     }
     else if (action === "remove-person") {
       const person = this._state.persons.find(p => p.slug === slug);
       if (!confirm(`Delete ${person?.name || slug}? Rules and runtime state will be lost.`)) return;
-      await this._ws("wake_planner/remove_person", { person_id: slug });
+      const ok = await this._ws("wake_planner/remove_person", { person_id: slug });
+      if (ok) this._renderShell();
     }
     else if (action === "edit-person") this._openEditPersonDialog(slug);
-    else if (action === "add-rule") await this._addRule(slug);
+    else if (action === "add-rule") await this._addRule(slug, el);
     else if (action === "delete-rule") await this._deleteRule(slug, el.dataset.rule);
-    else if (action === "save-rule") await this._saveRule(slug, el.dataset.rule);
-    else if (action === "save-window") await this._saveWindow(slug);
-    else if (action === "save-global") await this._saveGlobal();
+    else if (action === "save-rule") await this._saveRule(slug, el.dataset.rule, el);
+    else if (action === "save-window") await this._saveWindow(slug, el);
+    else if (action === "save-global") await this._saveGlobal(el);
   }
 
   _collectRuleFields(slug, ruleId) {
@@ -600,16 +670,16 @@ class WakePlannerPanel extends HTMLElement {
     return out;
   }
 
-  async _saveRule(slug, ruleId) {
+  async _saveRule(slug, ruleId, btn) {
     const person = this._state.persons.find(p => p.slug === slug);
     if (!person) return;
     const updated = this._collectRuleFields(slug, ruleId);
     const rules = person.rules.map(r => r.id === ruleId ? { ...r, ...updated, id: r.id } : r);
     const ok = await this._ws("wake_planner/set_rules", { person_id: slug, rules });
-    if (ok) this._toast("Rule saved");
+    if (ok) { this._flashSuccess(btn); this._toast("Rule saved"); this._updateTodayCard(slug); }
   }
 
-  async _addRule(slug) {
+  async _addRule(slug, btn) {
     const person = this._state.persons.find(p => p.slug === slug);
     if (!person) return;
     const newRule = {
@@ -622,25 +692,26 @@ class WakePlannerPanel extends HTMLElement {
       wake_time: "07:00",
     };
     const rules = [...person.rules, newRule];
-    await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+    const ok = await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+    if (ok) { this._flashSuccess(btn); this._updatePersonCard(slug); this._updateTodayCard(slug); }
   }
 
   async _deleteRule(slug, ruleId) {
     const person = this._state.persons.find(p => p.slug === slug);
     if (!person) return;
     if (!confirm("Delete this rule?")) return;
-    const rules = person.rules.filter(r => r.id !== ruleId);
-    await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+    const ok = await this._ws("wake_planner/set_rules", { person_id: slug, rules: person.rules.filter(r => r.id !== ruleId) });
+    if (ok) { this._updatePersonCard(slug); this._updateTodayCard(slug); this._toast("Rule deleted"); }
   }
 
-  async _saveWindow(slug) {
+  async _saveWindow(slug, btn) {
     const el = this.querySelector(`[data-window-for="${slug}"]`);
     const minutes = Math.max(1, Math.min(120, parseInt(el?.value || "5", 10)));
     const ok = await this._ws("wake_planner/update_person", { person_id: slug, wake_window_minutes: minutes });
-    if (ok) this._toast("Saved");
+    if (ok) { this._flashSuccess(btn); this._toast("Saved"); }
   }
 
-  async _saveGlobal() {
+  async _saveGlobal(btn) {
     const payload = {};
     this.querySelectorAll("[data-global-field]").forEach(el => {
       const key = el.dataset.globalField;
@@ -648,10 +719,10 @@ class WakePlannerPanel extends HTMLElement {
       else payload[key] = el.value;
     });
     const ok = await this._ws("wake_planner/set_global", payload);
-    if (ok) this._toast("Settings saved");
+    if (ok) { this._flashSuccess(btn); this._toast("Settings saved"); }
   }
 
-  _openOverrideDialog(slug) {
+  _openOverrideDialog(slug, sourceBtn) {
     const person = this._state.persons.find(p => p.slug === slug);
     const initialTime = person?.override_time || person?.decision?.wake_time || "07:00";
     const initialUntil = person?.override_until || "";
@@ -666,7 +737,8 @@ class WakePlannerPanel extends HTMLElement {
     `, async (modal) => {
       const wake = modal.querySelector("#ov-time").value;
       const until = modal.querySelector("#ov-until").value || null;
-      await this._ws("wake_planner/set_override", { person_id: slug, wake_time: wake, until });
+      const ok = await this._ws("wake_planner/set_override", { person_id: slug, wake_time: wake, until });
+      if (ok) { this._updateTodayCard(slug); this._flashSuccess(sourceBtn); this._toast("Override set"); }
     });
   }
 
@@ -689,7 +761,8 @@ class WakePlannerPanel extends HTMLElement {
       const name = modal.querySelector("#ep-name").value.trim();
       const entity = modal.querySelector("#ep-entity").value || null;
       if (!name) return;
-      await this._ws("wake_planner/update_person", { person_id: slug, name, person_entity_id: entity });
+      const ok = await this._ws("wake_planner/update_person", { person_id: slug, name, person_entity_id: entity });
+      if (ok) { this._updatePersonCard(slug); this._updateTodayCard(slug); this._toast("Saved"); }
     });
   }
 

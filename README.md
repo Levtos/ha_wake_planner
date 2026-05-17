@@ -44,8 +44,10 @@ Examples you can build entirely from the panel:
 
 If you configure a wake calendar, events whose title contains
 `wake: HH:MM` override that day's rule. All-day events with titles like
-`no-wake` or `schlaf aus` skip the day. The integration can optionally
-write planned wake events back into the same calendar.
+`no-wake` or `schlaf aus` skip the day. Wake Planner only **reads** from
+the calendar — it never creates or modifies events. To change a wake
+time for a specific day, either edit the calendar event title or use the
+**Override** button in the panel.
 
 ## Holiday handling
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 import logging
-import re
 import uuid
 from typing import Any
 
@@ -29,7 +28,6 @@ from .const import (
     CONF_RULES,
     CONF_SLUG,
     CONF_WAKE_WINDOW_MINUTES,
-    CONF_WRITE_TO_CALENDAR,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
     DEFAULT_WAKE_WINDOW_MINUTES,
@@ -127,11 +125,6 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         self.last_update_iso = now.isoformat()
 
         self._fire_wake_events(data, now)
-
-        today_str = now.date().isoformat()
-        if getattr(self, "_last_write_date", None) != today_str:
-            await self.async_write_calendar_events()
-            self._last_write_date = today_str
         return data
 
     def _fire_wake_events(self, data: dict[str, WakeDecision], now: datetime) -> None:
@@ -188,99 +181,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_save()
         await self.async_request_refresh()
 
-    # --- calendar write-back -------------------------------------------
-
-    async def async_write_calendar_events(self) -> None:
-        """Write planned wake events to the configured calendar for the next 14 days."""
-        if not self.options.get(CONF_WRITE_TO_CALENDAR):
-            return
-        write_entity_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
-        if not write_entity_id:
-            return
-        now = dt_util.now()
-        today = now.date()
-        wake_pattern = re.compile(
-            self.options.get(CONF_CALENDAR_WAKE_PATTERN, DEFAULT_CALENDAR_WAKE_PATTERN),
-            re.IGNORECASE,
-        )
-        for offset in range(14):
-            day = today + timedelta(days=offset)
-            start_dt = datetime.combine(day, time(0, 0), tzinfo=now.tzinfo)
-            end_dt = datetime.combine(day, time(23, 59), tzinfo=now.tzinfo)
-            try:
-                response = await self.hass.services.async_call(
-                    "calendar",
-                    "get_events",
-                    {
-                        "entity_id": write_entity_id,
-                        "start_date_time": start_dt.isoformat(),
-                        "end_date_time": end_dt.isoformat(),
-                    },
-                    blocking=True,
-                    return_response=True,
-                )
-            except Exception:
-                _LOGGER.debug("Could not fetch events from %s", write_entity_id)
-                continue
-            existing_events = (response or {}).get(write_entity_id, {}).get("events", [])
-            for person in self.persons:
-                decision = self.data.get(person.slug) if self.data else None
-                if not decision or not decision.wake_time or day != now.date():
-                    # Only write for known scheduled days; deep planning handled per-day
-                    pass
-                # Find decision for this specific day by quick re-eval (cheap)
-                from .rule_engine import RuleEngine
-                engine = RuleEngine(
-                    runtime_states=self.runtime_states,
-                    calendar_decisions={},
-                    holiday_by_date={},
-                    holiday_behavior=HOLIDAY_SKIP,
-                )
-                day_decision = engine._decide_for_date(person, day, now)  # noqa: SLF001
-                if day_decision.wake_time is None:
-                    continue
-                profile_time = day_decision.wake_time
-                if len(self.persons) > 1:
-                    candidate_events = [
-                        e for e in existing_events
-                        if person.name.lower() in (e.get("summary") or "").lower()
-                        or f"[{person.slug}]" in (e.get("summary") or "")
-                    ]
-                else:
-                    candidate_events = [e for e in existing_events if wake_pattern.search(e.get("summary") or "")]
-                has_wp_event = False
-                has_user_modified = False
-                for evt in candidate_events:
-                    m = wake_pattern.search(evt.get("summary") or "")
-                    if not m:
-                        continue
-                    try:
-                        evt_h, evt_m = map(int, m.group("time").split(":"))
-                        evt_time = time(evt_h, evt_m)
-                        if evt_time == profile_time:
-                            has_wp_event = True
-                        else:
-                            has_user_modified = True
-                    except (ValueError, IndexError):
-                        pass
-                if not has_wp_event and not has_user_modified:
-                    wake_dt = datetime.combine(day, profile_time, tzinfo=now.tzinfo)
-                    summary = f"wake: {profile_time.strftime('%H:%M')}"
-                    if len(self.persons) > 1:
-                        summary += f" [{person.slug}]"
-                    try:
-                        await self.hass.services.async_call(
-                            "calendar", "create_event",
-                            {
-                                "entity_id": write_entity_id,
-                                "summary": summary,
-                                "start_date_time": wake_dt.isoformat(),
-                                "end_date_time": (wake_dt + timedelta(minutes=30)).isoformat(),
-                            },
-                            blocking=True,
-                        )
-                    except Exception:
-                        _LOGGER.debug("Could not create wake event in %s for %s/%s", write_entity_id, person.slug, day)
+    # --- person / rule editing (used by services + WS API) --------------
 
     # --- person / rule editing (used by services + WS API) --------------
 
