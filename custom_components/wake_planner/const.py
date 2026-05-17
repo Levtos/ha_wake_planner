@@ -15,29 +15,17 @@ CONF_PERSONS = "persons"
 CONF_PERSON_NAME = "name"
 CONF_PERSON_ENTITY_ID = "person_entity_id"
 CONF_SLUG = "slug"
-CONF_WEEKLY_PROFILE = "weekly_profile"
-CONF_TARGET_SLEEP_HOURS = "target_sleep_hours"
+CONF_RULES = "rules"
 CONF_WAKE_WINDOW_MINUTES = "wake_window_minutes"
 CONF_HOLIDAY_CALENDAR_ENTITY_ID = "holiday_calendar_entity_id"
 CONF_HOLIDAY_BEHAVIOR = "holiday_behavior"
 CONF_MANUAL_HOLIDAY_DATES = "manual_holiday_dates"
 CONF_CALENDAR_ENTITY_ID = "calendar_entity_id"
-CONF_CALDAV_URL = "caldav_url"
-CONF_CALDAV_USERNAME = "caldav_username"
-CONF_CALDAV_PASSWORD = "caldav_password"
 CONF_CALENDAR_WAKE_PATTERN = "calendar_wake_pattern"
 CONF_CALENDAR_SKIP_TITLES = "calendar_skip_titles"
-CONF_WRITE_CALENDAR_ENTITY_ID = "write_calendar_entity_id"  # kept for backward compat
 CONF_WRITE_TO_CALENDAR = "write_to_calendar"
 
-CONF_SHIFT_CYCLE = "shift_cycle"
-CONF_SHIFT_ANCHOR_DATE = "anchor_date"
-CONF_SHIFT_SLOTS = "slots"
-CONF_SHIFT_SLOT_NAME = "slot_name"
-CONF_SHIFT_SLOT_DAYS = "duration_days"
-
 DEFAULT_WAKE_TIME = "07:00"
-DEFAULT_TARGET_SLEEP_HOURS = 7.5
 DEFAULT_WAKE_WINDOW_MINUTES = 5
 DEFAULT_CALENDAR_WAKE_PATTERN = r"(?:wake:\s*)?(?P<time>[0-2]?\d:[0-5]\d)"
 DEFAULT_CALENDAR_SKIP_TITLES = "no-wake,schlaf aus"
@@ -53,20 +41,17 @@ STORAGE_KEY = f"{DOMAIN}.state"
 SERVICE_SKIP_NEXT = "skip_next"
 SERVICE_SET_OVERRIDE = "set_override"
 SERVICE_CLEAR_OVERRIDE = "clear_override"
-SERVICE_LOG_SLEEP = "log_sleep"
-SERVICE_SET_WEEKLY_PROFILE = "set_weekly_profile"
-SERVICE_SET_SLEEP_SETTINGS = "set_sleep_settings"
 SERVICE_SET_SPECIAL_RULES = "set_special_rules"
+SERVICE_ADD_PERSON = "add_person"
+SERVICE_REMOVE_PERSON = "remove_person"
+SERVICE_SET_RULES = "set_rules"
 
 ATTR_DECIDED_BY = "decided_by"
 ATTR_REASON = "reason"
 ATTR_WAKE_TIME = "wake_time"
-ATTR_WAKE_WINDOW_START = "wake_window_start"
-ATTR_WAKE_WINDOW_END = "wake_window_end"
-ATTR_PROFILE_DAY = "profile_day"
-ATTR_HOLIDAY_NAME = "holiday_name"
-ATTR_SKIP_ACTIVE = "skip_active"
-ATTR_OVERRIDE_UNTIL = "override_until"
+
+EVENT_WAKE_TRIGGERED = f"{DOMAIN}_wake_triggered"
+
 
 class WakeState(StrEnum):
     """Supported wake decision states."""
@@ -78,41 +63,36 @@ class WakeState(StrEnum):
     INACTIVE = "inactive"
 
 
-@dataclass(slots=True)
-class WeeklyDayProfile:
-    """Wake profile for one weekday."""
+# --- Rule model -------------------------------------------------------------
 
-    active: bool = True
-    wake_time: time = time(7, 0)
+RULE_ACTION_WAKE = "wake"
+RULE_ACTION_SKIP = "skip"
 
 
 @dataclass(slots=True)
-class ShiftSlot:
-    """One profile in a shift cycle."""
+class Rule:
+    """A single wake rule. Conditions AND together; first matching rule wins."""
 
+    id: str
     name: str
-    duration_days: int
-    weekly_profile: dict[str, WeeklyDayProfile]
+    priority: int = 100  # lower = evaluated first
+    enabled: bool = True
 
+    # Conditions (all that are set must match; unset = ignored)
+    weekdays: set[int] | None = None              # 0=Mon..6=Sun
+    date_from: date | None = None                 # inclusive
+    date_to: date | None = None                   # inclusive
+    week_interval: int | None = None              # every Nth ISO week
+    week_anchor: date | None = None               # any date within reference week
+    specific_dates: list[date] | None = None      # one-off matches
+    cycle_anchor: date | None = None              # shift cycles
+    cycle_length: int | None = None               # total days in cycle
+    cycle_slot_start: int | None = None           # 0-indexed start day in cycle
+    cycle_slot_length: int | None = None          # number of consecutive days
 
-@dataclass
-class ShiftCycle:
-    """Rotating shift schedule anchored to a reference date."""
-
-    anchor_date: date
-    slots: list[ShiftSlot]
-
-    def active_slot(self, day: date) -> ShiftSlot:
-        total = sum(s.duration_days for s in self.slots)
-        offset = (day - self.anchor_date).days % total
-        if offset < 0:
-            offset += total
-        cumulative = 0
-        for slot in self.slots:
-            cumulative += slot.duration_days
-            if offset < cumulative:
-                return slot
-        return self.slots[-1]
+    # Action
+    action: str = RULE_ACTION_WAKE                # "wake" | "skip"
+    wake_time: time | None = None                 # required when action="wake"
 
 
 @dataclass(slots=True)
@@ -122,10 +102,8 @@ class PersonConfig:
     slug: str
     name: str
     person_entity_id: str | None
-    weekly_profile: dict[str, WeeklyDayProfile]
-    target_sleep_hours: float = DEFAULT_TARGET_SLEEP_HOURS
+    rules: list[Rule] = field(default_factory=list)
     wake_window_minutes: int = DEFAULT_WAKE_WINDOW_MINUTES
-    shift_cycle: ShiftCycle | None = None
 
 
 @dataclass(slots=True)
@@ -146,13 +124,13 @@ class WakeDecision:
     state: WakeState
     decided_by: str
     reason: str
-    profile_day: str | None = None
     holiday_name: str | None = None
     skip_active: bool = False
     override_until: date | None = None
     next_wake: datetime | None = None
     wake_window_start: datetime | None = None
     wake_window_end: datetime | None = None
+    matched_rule_id: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable representation."""
@@ -161,13 +139,13 @@ class WakeDecision:
             "state": self.state.value,
             "decided_by": self.decided_by,
             "reason": self.reason,
-            "profile_day": self.profile_day,
             "holiday_name": self.holiday_name,
             "skip_active": self.skip_active,
             "override_until": self.override_until.isoformat() if self.override_until else None,
             "next_wake": self.next_wake.isoformat() if self.next_wake else None,
             "wake_window_start": self.wake_window_start.isoformat() if self.wake_window_start else None,
             "wake_window_end": self.wake_window_end.isoformat() if self.wake_window_end else None,
+            "matched_rule_id": self.matched_rule_id,
         }
 
 
@@ -178,4 +156,3 @@ class RuntimePersonState:
     skip_next: bool = False
     override_time: time | None = None
     override_until: date | None = None
-    sleep_log: list[dict[str, str]] = field(default_factory=list)

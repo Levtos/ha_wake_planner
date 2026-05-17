@@ -1,4 +1,4 @@
-"""Config flow for Wake Planner."""
+"""Config flow for Wake Planner — minimal setup, real config happens in the panel."""
 
 from __future__ import annotations
 
@@ -10,61 +10,25 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
-from homeassistant.util import slugify
 
 from .const import (
-    CONF_CALDAV_PASSWORD,
-    CONF_CALDAV_URL,
-    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_BEHAVIOR,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_MANUAL_HOLIDAY_DATES,
-    CONF_PERSON_ENTITY_ID,
-    CONF_PERSON_NAME,
     CONF_PERSONS,
-    CONF_SHIFT_ANCHOR_DATE,
-    CONF_SHIFT_CYCLE,
-    CONF_SHIFT_SLOT_DAYS,
-    CONF_SHIFT_SLOT_NAME,
-    CONF_SHIFT_SLOTS,
-    CONF_SLUG,
-    CONF_TARGET_SLEEP_HOURS,
-    CONF_WAKE_WINDOW_MINUTES,
-    CONF_WEEKLY_PROFILE,
-    CONF_WRITE_CALENDAR_ENTITY_ID,
     CONF_WRITE_TO_CALENDAR,
-    DAYS,
-    DEFAULT_TARGET_SLEEP_HOURS,
-    DEFAULT_WAKE_TIME,
-    DEFAULT_WAKE_WINDOW_MINUTES,
     DOMAIN,
     HOLIDAY_SKIP,
     HOLIDAY_WEEKEND_PROFILE,
 )
-from .rule_engine import parse_time
-from .util import default_weekly_profile
 
 _LOGGER = logging.getLogger(__name__)
-
-DAY_FIELDS = {
-    "monday": "mon",
-    "tuesday": "tue",
-    "wednesday": "wed",
-    "thursday": "thu",
-    "friday": "fri",
-    "saturday": "sat",
-    "sunday": "sun",
-}
-CONF_CONFIGURE_CALDAV = "configure_caldav"
-CONF_ENABLE_SHIFT_CYCLE = "enable_shift_cycle"
-CONF_NUM_SHIFT_SLOTS = "num_slots"
 
 CALENDAR_OPTION_KEYS = {
     CONF_CALENDAR_ENTITY_ID,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_WRITE_TO_CALENDAR,
-    CONF_WRITE_CALENDAR_ENTITY_ID,  # kept so old entries are cleaned up on save
 }
 SPECIAL_RULE_OPTION_KEYS = {
     CONF_HOLIDAY_BEHAVIOR,
@@ -73,395 +37,73 @@ SPECIAL_RULE_OPTION_KEYS = {
 
 
 class WakePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a Wake Planner config flow."""
+    """Minimal setup: optional calendars; people + rules are added in the panel."""
 
     VERSION = 1
-
-    def __init__(self) -> None:
-        self._persons: list[dict[str, Any]] = []
-        self._person: dict[str, Any] = {}
-        self._settings: dict[str, Any] = {}
-        self._calendar_configured = False
-        self._special_rules_configured = False
-        self._shift_slots: list[dict] = []
-        self._shift_slot_index: int = 0
-        self._num_shift_slots: int = 0
-        self._shift_anchor_date: str = ""
 
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        """Return the options flow handler."""
         from .options_flow import WakePlannerOptionsFlow
 
         return WakePlannerOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Start the setup flow with the person step."""
-        return await self.async_step_person(user_input)
-
-    async def async_step_person(self, user_input: dict[str, Any] | None = None):
-        """Configure a person."""
-        self._log_step("person", user_input)
-        errors: dict[str, str] = {}
+        if self._async_current_entries():
+            return self.async_abort(reason="already_configured")
         if user_input is not None:
-            name = user_input.get(CONF_PERSON_NAME, "").strip()
-            entity_id = user_input.get(CONF_PERSON_ENTITY_ID) or ""
-            if not name and entity_id:
-                state = self.hass.states.get(entity_id)
-                name = (state.attributes.get("friendly_name") if state else None) or entity_id.split(".")[-1].replace("_", " ").title()
-                user_input[CONF_PERSON_NAME] = name
-            slug = slugify(name)
-            if not slug:
-                errors[CONF_PERSON_NAME] = "invalid_name"
-            elif slug in {person[CONF_SLUG] for person in self._persons}:
-                errors[CONF_PERSON_NAME] = "duplicate_person"
-            else:
-                self._person = {
-                    CONF_PERSON_NAME: name,
-                    CONF_SLUG: slug,
-                    CONF_PERSON_ENTITY_ID: user_input.get(CONF_PERSON_ENTITY_ID) or None,
-                }
-                if not self._calendar_configured:
-                    return await self.async_step_calendar()
-                return await self._complete_current_person()
+            data = {CONF_PERSONS: []}
+            data.update(_clean_calendar_input(user_input))
+            return self.async_create_entry(title="Wake Planner", data=data)
         return self.async_show_form(
-            step_id="person",
-            data_schema=_person_schema(entity_ids=self._entity_ids("person")),
-            errors=errors,
-        )
-
-    def _apply_person_defaults(self) -> None:
-        """Apply default weekly profile and sleep settings when wizard steps are skipped."""
-        if CONF_WEEKLY_PROFILE not in self._person:
-            self._person[CONF_WEEKLY_PROFILE] = {
-                day: {"active": day not in ("saturday", "sunday"), "wake_time": DEFAULT_WAKE_TIME}
-                for day in DAYS
-            }
-        self._person.setdefault(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)
-        self._person.setdefault(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)
-
-    async def _complete_current_person(self):
-        """Apply defaults, append person to list, proceed to more-people step."""
-        self._apply_person_defaults()
-        if not self._special_rules_configured:
-            self._settings.setdefault(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)
-            self._special_rules_configured = True
-        self._persons.append(self._person)
-        self._shift_slots = []
-        self._shift_slot_index = 0
-        return await self.async_step_more_people()
-
-    async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
-        """Configure optional calendar sources."""
-        self._log_step("calendar", user_input)
-        if user_input is not None:
-            self._settings.update(_clean_calendar_input(user_input))
-            self._calendar_configured = True
-            return await self._complete_current_person()
-        return self.async_show_form(
-            step_id="calendar",
-            data_schema=_calendar_schema(entity_ids=self._entity_ids("calendar")),
-        )
-
-    async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
-        """Configure holiday and vacation handling."""
-        self._log_step("special_rules", user_input)
-        if user_input is not None:
-            self._settings.update(_clean_special_rules_input(user_input))
-            self._special_rules_configured = True
-            return await self.async_step_sleep_target()
-        return self.async_show_form(
-            step_id="special_rules",
-            data_schema=_special_rules_schema(self._settings),
-        )
-
-    def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
-        """Log config flow progress so UI 500s leave a backend breadcrumb."""
-        _LOGGER.debug(
-            "Wake Planner config flow step=%s submitted=%s persons=%s settings=%s",
-            step_id,
-            user_input is not None,
-            len(self._persons),
-            sorted(self._settings),
+            step_id="user",
+            data_schema=_calendar_schema(self._entity_ids("calendar")),
         )
 
     def _entity_ids(self, domain: str) -> list[str]:
-        """Return sorted entity ids for a selector domain."""
         try:
             return sorted(self.hass.states.async_entity_ids(domain))
-        except Exception:  # noqa: BLE001 - config flow must stay usable while debugging
-            _LOGGER.exception(
-                "Wake Planner config flow could not load %s entity ids; "
-                "continuing with an empty selector",
-                domain,
-            )
+        except Exception:  # noqa: BLE001
             return []
 
-    async def _async_create_config_entry(self):
-        """Create the Wake Planner config entry."""
-        data = {CONF_PERSONS: self._persons, **self._settings}
-        return self.async_create_entry(title="Wake Planner", data=data)
 
-    async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
-        """Configure weekly profile."""
-        self._log_step("weekly_profile", user_input)
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                self._person[CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
-            except ValueError:
-                errors["base"] = "invalid_time"
-            else:
-                if not self._special_rules_configured:
-                    return await self.async_step_special_rules()
-                return await self.async_step_sleep_target()
-        return self.async_show_form(
-            step_id="weekly_profile",
-            data_schema=_weekly_schema(),
-            errors=errors,
-        )
-
-    async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
-        """Configure sleep target and wake window."""
-        self._log_step("sleep_target", user_input)
-        if user_input is not None:
-            self._person[CONF_TARGET_SLEEP_HOURS] = float(user_input[CONF_TARGET_SLEEP_HOURS])
-            self._person[CONF_WAKE_WINDOW_MINUTES] = int(user_input[CONF_WAKE_WINDOW_MINUTES])
-            self._persons.append(self._person)
-            self._shift_slots = []
-            self._shift_slot_index = 0
-            return await self.async_step_shift_cycle_setup()
-        return self.async_show_form(step_id="sleep_target", data_schema=_sleep_schema())
-
-    async def async_step_shift_cycle_setup(self, user_input: dict[str, Any] | None = None):
-        """Ask whether this person works shifts."""
-        self._log_step("shift_cycle_setup", user_input)
-        if user_input is not None:
-            if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
-                self._num_shift_slots = int(user_input.get(CONF_NUM_SHIFT_SLOTS) or 1)
-                self._shift_anchor_date = str(user_input.get(CONF_SHIFT_ANCHOR_DATE) or "").strip()
-                self._shift_slots = []
-                self._shift_slot_index = 0
-                return await self.async_step_shift_slot()
-            self._persons[-1].pop(CONF_SHIFT_CYCLE, None)
-            return await self.async_step_more_people()
-        current_cycle = self._persons[-1].get(CONF_SHIFT_CYCLE) or {}
-        return self.async_show_form(
-            step_id="shift_cycle_setup",
-            data_schema=_shift_cycle_setup_schema(current_cycle),
-        )
-
-    async def async_step_shift_slot(self, user_input: dict[str, Any] | None = None):
-        """Configure one shift slot name and duration."""
-        self._log_step("shift_slot", user_input)
-        if user_input is not None:
-            self._shift_slots.append({
-                CONF_SHIFT_SLOT_NAME: str(user_input[CONF_SHIFT_SLOT_NAME]).strip() or f"Profile {self._shift_slot_index + 1}",
-                CONF_SHIFT_SLOT_DAYS: int(user_input[CONF_SHIFT_SLOT_DAYS]),
-            })
-            return await self.async_step_shift_slot_profile()
-        return self.async_show_form(
-            step_id="shift_slot",
-            data_schema=_shift_slot_schema(),
-            description_placeholders={
-                "slot_num": str(self._shift_slot_index + 1),
-                "total": str(self._num_shift_slots),
-            },
-        )
-
-    async def async_step_shift_slot_profile(self, user_input: dict[str, Any] | None = None):
-        """Configure weekly schedule for the current shift slot."""
-        self._log_step("shift_slot_profile", user_input)
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                self._shift_slots[-1][CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
-            except ValueError:
-                errors["base"] = "invalid_time"
-            else:
-                self._shift_slot_index += 1
-                if self._shift_slot_index < self._num_shift_slots:
-                    return await self.async_step_shift_slot()
-                self._persons[-1][CONF_SHIFT_CYCLE] = {
-                    CONF_SHIFT_ANCHOR_DATE: self._shift_anchor_date,
-                    CONF_SHIFT_SLOTS: self._shift_slots,
-                }
-                return await self.async_step_more_people()
-        return self.async_show_form(
-            step_id="shift_slot_profile",
-            data_schema=_weekly_schema(),
-            description_placeholders={"slot_name": self._shift_slots[-1].get(CONF_SHIFT_SLOT_NAME, "")},
-            errors=errors,
-        )
-
-    async def async_step_more_people(self, user_input: dict[str, Any] | None = None):
-        """Ask whether to add more people."""
-        self._log_step("more_people", user_input)
-        if user_input is not None:
-            if user_input["add_another"]:
-                self._person = {}
-                return await self.async_step_person()
-            return await self._async_create_config_entry()
-        return self.async_show_form(
-            step_id="more_people",
-            data_schema=vol.Schema({
-                vol.Required("add_another", default=False): selector.BooleanSelector(),
-            }),
-        )
-
-
-def _is_empty_optional_value(value: Any) -> bool:
-    """Return true for empty values produced by optional form fields."""
-    return value is None or value == "" or value == [] or value == {}
+def _is_empty(value: Any) -> bool:
+    return value is None or value in ("", [], {})
 
 
 def _normalize(data: dict[str, Any]) -> dict[str, Any]:
-    """Coerce empty optional selector values to None."""
-    return {
-        key: (None if _is_empty_optional_value(value) else value)
-        for key, value in data.items()
-    }
+    return {key: (None if _is_empty(value) else value) for key, value in data.items()}
 
 
-def _entity_options(
-    entity_ids: list[str] | None,
-    current: str | None = None,
-) -> list[dict[str, str]]:
-    """Return select options for optional Home Assistant entity ids."""
+def _entity_select(entity_ids: list[str] | None, current: str | None = None) -> selector.SelectSelector:
     options = [{"value": "", "label": "—"}]
-    entity_set = set(entity_ids or [])
+    pool = set(entity_ids or [])
     if current:
-        entity_set.add(current)
-    options.extend(
-        {"value": entity_id, "label": entity_id}
-        for entity_id in sorted(entity_set)
-    )
-    return options
-
-
-def _entity_select(
-    entity_ids: list[str] | None,
-    current: str | None = None,
-) -> selector.SelectSelector:
-    """Return a clearable select selector populated from current HA entities."""
+        pool.add(current)
+    options.extend({"value": e, "label": e} for e in sorted(pool))
     return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=_entity_options(entity_ids, current),
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
+        selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
     )
 
 
-def _person_schema(
-    defaults: dict[str, Any] | None = None,
-    entity_ids: list[str] | None = None,
-) -> vol.Schema:
-    """Return the person form schema."""
+def _calendar_schema(entity_ids: list[str] | None = None, defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
-    name = defaults.get(CONF_PERSON_NAME)
-    name_key = (
-        vol.Required(CONF_PERSON_NAME, default=name)
-        if name
-        else vol.Required(CONF_PERSON_NAME)
-    )
-    person_entity = defaults.get(CONF_PERSON_ENTITY_ID)
+    cal = defaults.get(CONF_CALENDAR_ENTITY_ID)
+    hol = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
     return vol.Schema({
-        name_key: selector.TextSelector(),
-        vol.Optional(CONF_PERSON_ENTITY_ID, default=person_entity or ""): _entity_select(
-            entity_ids,
-            person_entity,
-        ),
+        vol.Optional(CONF_CALENDAR_ENTITY_ID, default=cal or ""): _entity_select(entity_ids, cal),
+        vol.Optional(CONF_HOLIDAY_CALENDAR_ENTITY_ID, default=hol or ""): _entity_select(entity_ids, hol),
+        vol.Optional(CONF_WRITE_TO_CALENDAR, default=bool(defaults.get(CONF_WRITE_TO_CALENDAR))): selector.BooleanSelector(),
     })
 
-def _weekly_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    defaults = defaults or default_weekly_profile()
-    fields: dict[Any, Any] = {
-        vol.Optional("global_wake_time", default=""): selector.TextSelector(
-            selector.TextSelectorConfig(placeholder="HH:MM – applies to all active days")
-        ),
-    }
-    for day in DAYS:
-        prefix = DAY_FIELDS[day]
-        active_key = vol.Required(
-            f"{prefix}_active",
-            default=defaults.get(day, {}).get("active", True),
-        )
-        wake_time_key = vol.Required(
-            f"{prefix}_wake_time",
-            default=defaults.get(day, {}).get("wake_time", DEFAULT_WAKE_TIME),
-        )
-        fields[active_key] = selector.BooleanSelector()
-        fields[wake_time_key] = selector.TextSelector()
-    return vol.Schema(fields)
-
-
-def _sleep_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    defaults = defaults or {}
-    return vol.Schema({
-        vol.Required(
-            CONF_TARGET_SLEEP_HOURS,
-            default=float(defaults.get(CONF_TARGET_SLEEP_HOURS, DEFAULT_TARGET_SLEEP_HOURS)),
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                mode=selector.NumberSelectorMode.BOX,
-                min=4,
-                max=12,
-                step=0.5,
-            )
-        ),
-        vol.Required(
-            CONF_WAKE_WINDOW_MINUTES,
-            default=int(defaults.get(CONF_WAKE_WINDOW_MINUTES, DEFAULT_WAKE_WINDOW_MINUTES)),
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                mode=selector.NumberSelectorMode.BOX,
-                min=1,
-                max=60,
-                step=1,
-            )
-        ),
-    })
-
-
-def _calendar_schema(
-    defaults: dict[str, Any] | None = None,
-    entity_ids: list[str] | None = None,
-) -> vol.Schema:
-    """Return the calendar form schema."""
-    defaults = defaults or {}
-    calendar_entity = defaults.get(CONF_CALENDAR_ENTITY_ID)
-    holiday_entity = defaults.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
-    # write_to_calendar replaces the old per-entity selector — use the same
-    # calendar that's already configured for reading
-    write_to_cal = bool(
-        defaults.get(CONF_WRITE_TO_CALENDAR)
-        or defaults.get(CONF_WRITE_CALENDAR_ENTITY_ID)  # migrate old config
-    )
-    return vol.Schema({
-        vol.Optional(
-            CONF_CALENDAR_ENTITY_ID,
-            default=calendar_entity or "",
-        ): _entity_select(entity_ids, calendar_entity),
-        vol.Optional(
-            CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-            default=holiday_entity or "",
-        ): _entity_select(entity_ids, holiday_entity),
-        vol.Optional(
-            CONF_WRITE_TO_CALENDAR,
-            default=write_to_cal,
-        ): selector.BooleanSelector(),
-    })
 
 def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    """Return holiday and vacation rule settings."""
     defaults = defaults or {}
     return vol.Schema({
         vol.Required(
-            CONF_HOLIDAY_BEHAVIOR,
-            default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
+            CONF_HOLIDAY_BEHAVIOR, default=defaults.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP)
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[HOLIDAY_SKIP, HOLIDAY_WEEKEND_PROFILE],
@@ -469,70 +111,20 @@ def _special_rules_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             )
         ),
         vol.Optional(
-            CONF_MANUAL_HOLIDAY_DATES,
-            default=defaults.get(CONF_MANUAL_HOLIDAY_DATES) or "",
+            CONF_MANUAL_HOLIDAY_DATES, default=defaults.get(CONF_MANUAL_HOLIDAY_DATES) or ""
         ): selector.TextSelector(),
     })
 
 
-def _shift_cycle_setup_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    defaults = defaults or {}
-    enabled = bool(defaults.get(CONF_SHIFT_SLOTS))
-    num_slots = max(1, len(defaults.get(CONF_SHIFT_SLOTS) or []))
-    anchor = defaults.get(CONF_SHIFT_ANCHOR_DATE, "")
-    return vol.Schema({
-        vol.Required(CONF_ENABLE_SHIFT_CYCLE, default=enabled): selector.BooleanSelector(),
-        # Optional so the form can be submitted without filling these when toggle is OFF
-        vol.Optional(CONF_NUM_SHIFT_SLOTS, default=num_slots): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
-        ),
-        vol.Optional(CONF_SHIFT_ANCHOR_DATE, default=anchor): selector.TextSelector(),
-    })
-
-
-def _shift_slot_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
-    defaults = defaults or {}
-    return vol.Schema({
-        vol.Required(CONF_SHIFT_SLOT_NAME, default=defaults.get(CONF_SHIFT_SLOT_NAME, "")): selector.TextSelector(),
-        vol.Required(CONF_SHIFT_SLOT_DAYS, default=int(defaults.get(CONF_SHIFT_SLOT_DAYS, 7))): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=1, max=90, step=1, mode=selector.NumberSelectorMode.BOX)
-        ),
-    })
-
-
 def _clean_calendar_input(user_input: dict[str, Any]) -> dict[str, Any]:
-    """Drop empty optional calendar values before storing config entry data."""
     normalized = _normalize(user_input)
-    return {
-        key: value
-        for key, value in normalized.items()
-        if key in CALENDAR_OPTION_KEYS and value is not None
-    }
+    return {k: v for k, v in normalized.items() if k in CALENDAR_OPTION_KEYS and v is not None}
 
 
 def _clean_special_rules_input(user_input: dict[str, Any]) -> dict[str, Any]:
-    """Drop empty optional special-rule values before storing config entry data."""
     normalized = _normalize(user_input)
     return {
-        key: value.strip() if isinstance(value, str) else value
-        for key, value in normalized.items()
-        if key in SPECIAL_RULE_OPTION_KEYS and value is not None
+        k: (v.strip() if isinstance(v, str) else v)
+        for k, v in normalized.items()
+        if k in SPECIAL_RULE_OPTION_KEYS and v is not None
     }
-
-
-def _weekly_from_input(user_input: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Convert compact day field names into the stored weekly profile format."""
-    global_time = (user_input.get("global_wake_time") or "").strip()
-    if global_time:
-        _validate_time(global_time)  # raise ValueError early if malformed
-    result = {}
-    for day, prefix in DAY_FIELDS.items():
-        active = bool(user_input[f"{prefix}_active"])
-        wake_str = global_time if (global_time and active) else user_input[f"{prefix}_wake_time"]
-        result[day] = {"active": active, "wake_time": _validate_time(wake_str)}
-    return result
-
-
-def _validate_time(value: str) -> str:
-    parse_time(value)
-    return value
