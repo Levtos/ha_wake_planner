@@ -44,9 +44,11 @@ def format_time(value: time | None) -> str | None:
     return value.strftime("%H:%M") if value else None
 
 
-def rule_matches(rule: Rule, day: date) -> bool:
+def rule_matches(rule: Rule, day: date, is_holiday: bool = False) -> bool:
     """Return true if all set conditions on the rule match the given date."""
     if not rule.enabled:
+        return False
+    if rule.on_holiday is not None and bool(is_holiday) != rule.on_holiday:
         return False
     if rule.weekdays is not None and day.weekday() not in rule.weekdays:
         return False
@@ -146,15 +148,26 @@ class RuleEngine:
             )
 
         is_holiday, holiday_name = self._holiday_by_date.get(day, (False, None))
-        if is_holiday and self._holiday_behavior == HOLIDAY_SKIP:
-            return WakeDecision(
-                wake_time=None, state=WakeState.HOLIDAY, decided_by="holiday",
-                reason=holiday_name or "Holiday/weekend",
-                holiday_name=holiday_name, skip_active=runtime.skip_next,
-            )
 
-        matched = self._match_rule(person, day)
+        matched = self._match_rule(person, day, is_holiday)
         if matched is None:
+            # Fallback: a holiday with no rule explicitly handling it
+            if is_holiday:
+                if self._holiday_behavior == HOLIDAY_WEEKEND_PROFILE:
+                    saturday_rule = self._first_saturday_rule(person)
+                    if saturday_rule and saturday_rule.wake_time:
+                        return self._build(
+                            person, day, saturday_rule.wake_time, now.tzinfo,
+                            WakeState.SCHEDULED, "holiday_fallback",
+                            f"Holiday → using Saturday rule '{saturday_rule.name}'",
+                            holiday_name=holiday_name, skip_active=runtime.skip_next,
+                            matched_rule_id=saturday_rule.id,
+                        )
+                return WakeDecision(
+                    wake_time=None, state=WakeState.HOLIDAY, decided_by="holiday",
+                    reason=holiday_name or "Holiday/weekend",
+                    holiday_name=holiday_name, skip_active=runtime.skip_next,
+                )
             return WakeDecision(
                 wake_time=None, state=WakeState.INACTIVE, decided_by="no_rule",
                 reason="No matching rule",
@@ -177,12 +190,21 @@ class RuleEngine:
             matched_rule_id=matched.id,
         )
 
-    def _match_rule(self, person: PersonConfig, day: date) -> Rule | None:
+    def _match_rule(self, person: PersonConfig, day: date, is_holiday: bool = False) -> Rule | None:
         """Return the highest-priority rule matching the day, or None."""
         for rule in sorted(person.rules, key=lambda r: (r.priority, r.name)):
             if rule.action == RULE_ACTION_WAKE and rule.wake_time is None:
                 continue
-            if rule_matches(rule, day):
+            if rule_matches(rule, day, is_holiday):
+                return rule
+        return None
+
+    def _first_saturday_rule(self, person: PersonConfig) -> Rule | None:
+        """Find the highest-priority enabled wake rule that includes Saturday."""
+        for rule in sorted(person.rules, key=lambda r: (r.priority, r.name)):
+            if not rule.enabled or rule.action != RULE_ACTION_WAKE or rule.wake_time is None:
+                continue
+            if rule.weekdays and 5 in rule.weekdays:
                 return rule
         return None
 

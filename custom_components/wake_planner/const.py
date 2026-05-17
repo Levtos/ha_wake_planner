@@ -89,6 +89,7 @@ class Rule:
     cycle_length: int | None = None               # total days in cycle
     cycle_slot_start: int | None = None           # 0-indexed start day in cycle
     cycle_slot_length: int | None = None          # number of consecutive days
+    on_holiday: bool | None = None                # True = only holidays, False = only non-holidays
 
     # Action
     action: str = RULE_ACTION_WAKE                # "wake" | "skip"

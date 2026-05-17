@@ -75,6 +75,7 @@ def _parse_rule(raw: dict[str, Any]) -> Rule | None:
             cycle_length=int(raw["cycle_length"]) if raw.get("cycle_length") else None,
             cycle_slot_start=int(raw["cycle_slot_start"]) if raw.get("cycle_slot_start") is not None else None,
             cycle_slot_length=int(raw["cycle_slot_length"]) if raw.get("cycle_slot_length") else None,
+            on_holiday=bool(raw["on_holiday"]) if raw.get("on_holiday") is not None and raw.get("on_holiday") != "" else None,
             action=action,
             wake_time=wake_time,
         )
@@ -99,6 +100,7 @@ def rule_to_dict(rule: Rule) -> dict[str, Any]:
         "cycle_length": rule.cycle_length,
         "cycle_slot_start": rule.cycle_slot_start,
         "cycle_slot_length": rule.cycle_slot_length,
+        "on_holiday": rule.on_holiday,
         "action": rule.action,
         "wake_time": rule.wake_time.strftime("%H:%M") if rule.wake_time else None,
     }
