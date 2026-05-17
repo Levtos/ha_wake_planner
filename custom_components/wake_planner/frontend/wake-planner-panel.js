@@ -120,8 +120,23 @@ class WakePlannerPanel extends HTMLElement {
     if (!this._hass) return;
     this._state = await this._hass.callWS({ type: "wake_planner/get_state" });
     this._loaded = true;
-    if (this._tab === "calendar") await this._loadCalendarEvents();
+    if (this._tab === "calendar") await this._loadCalendarData();
     this._renderShell();
+  }
+
+  async _loadCalendarData() {
+    await Promise.all([this._loadSchedule(), this._loadCalendarEvents()]);
+  }
+
+  async _loadSchedule() {
+    try {
+      const res = await this._hass.callWS({ type: "wake_planner/get_schedule", days: 14 });
+      const map = {};
+      for (const day of (res?.schedule || [])) map[day.date] = day;
+      this._schedule = map;
+    } catch (e) {
+      this._schedule = {};
+    }
   }
 
   async _ws(type, payload = {}) {
@@ -153,8 +168,15 @@ class WakePlannerPanel extends HTMLElement {
           "GET", `calendars/${id}?start=${start.toISOString()}&end=${end.toISOString()}`
         );
         for (const evt of (events || [])) {
-          const key = (evt.start?.dateTime || evt.start?.date || "").substring(0, 10);
-          if (!key) continue;
+          const raw = evt.start?.dateTime || evt.start?.date || "";
+          if (!raw) continue;
+          let key;
+          if (raw.length <= 10) {
+            key = raw.substring(0, 10); // all-day
+          } else {
+            const d = new Date(raw);
+            key = isNaN(d.getTime()) ? raw.substring(0, 10) : localDateKey(d);
+          }
           (map[key] = map[key] || []).push(evt);
         }
       } catch (_e) { /* ignore */ }
@@ -245,35 +267,42 @@ class WakePlannerPanel extends HTMLElement {
     // Align grid to Monday
     const firstDow = (today.getDay() + 6) % 7;
     const cells = [];
-    // Empty leading cells
     for (let i = 0; i < firstDow; i++) cells.push(`<div class="cal-day" style="opacity:.3"></div>`);
+    const schedule = this._schedule || {};
     for (let i = 0; i < 14; i++) {
       const d = new Date(today); d.setDate(d.getDate() + i);
-      const key = d.toISOString().substring(0, 10);
+      const key = localDateKey(d);
       const isToday = i === 0;
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
       const events = this._calendarEvents[key] || [];
+      const dayInfo = schedule[key];
+      const holidayLabel = dayInfo?.holiday_name && dayInfo.holiday_name !== "Weekend"
+        ? `<div class="cal-evt" style="color:var(--warning-color,#ef6c00)">🎉 ${escapeHtml(dayInfo.holiday_name)}</div>`
+        : "";
 
       const wakes = persons.map(p => {
-        const dec = p.decision || {};
-        if (isToday) {
-          if (!dec.wake_time) return `<div class="cal-wake skip">${escapeHtml(p.name)}: —</div>`;
-          return `<div class="cal-wake">${escapeHtml(p.name)}: ${dec.wake_time}</div>`;
+        const dec = (dayInfo?.persons || {})[p.slug];
+        const fromCalendar = dec?.decided_by === "calendar";
+        const indicator = fromCalendar ? " 📅" : "";
+        if (!dec || !dec.wake_time) {
+          const label = dec?.state === "holiday" ? "Feiertag" : (dec?.state === "skipped" ? "skip" : "—");
+          return `<div class="cal-wake skip">${escapeHtml(p.name)}: ${label}</div>`;
         }
-        const wakeEvt = events.find(e => /wake:\s*\d{1,2}:\d{2}/i.test(e.summary || ""));
-        if (wakeEvt) {
-          const m = (wakeEvt.summary || "").match(/wake:\s*(\d{1,2}:\d{2})/i);
-          return `<div class="cal-wake">${escapeHtml(p.name)}: ${m ? m[1] : "?"} 📅</div>`;
-        }
-        return "";
+        return `<div class="cal-wake">${escapeHtml(p.name)}: ${dec.wake_time}${indicator}</div>`;
       }).join("");
 
-      const otherEvts = events.filter(e => !/wake:/i.test(e.summary || "")).slice(0, 2)
-        .map(e => `<div class="cal-evt">• ${escapeHtml(e.summary || "")}</div>`).join("");
+      const otherEvts = events
+        .filter(e => !/wake:/i.test(e.summary || ""))
+        .slice(0, 3)
+        .map(e => {
+          const t = eventTimeLabel(e);
+          return `<div class="cal-evt">• ${t ? `<b>${t}</b> ` : ""}${escapeHtml(e.summary || "")}</div>`;
+        })
+        .join("");
 
       cells.push(`<div class="cal-day${isToday ? " today" : ""}${isWeekend ? " weekend" : ""}">
         <div class="cal-date">${d.getDate()}.${d.getMonth() + 1}.</div>
-        ${wakes}${otherEvts}
+        ${holidayLabel}${wakes}${otherEvts}
       </div>`);
     }
     return `<ha-card>
@@ -470,7 +499,7 @@ class WakePlannerPanel extends HTMLElement {
 
   _wireEvents() {
     this.querySelectorAll("[data-tab]").forEach(el =>
-      el.addEventListener("click", () => { this._tab = el.dataset.tab; if (this._tab === "calendar") this._loadCalendarEvents().then(() => this._renderShell()); else this._renderShell(); })
+      el.addEventListener("click", () => { this._tab = el.dataset.tab; if (this._tab === "calendar") this._loadCalendarData().then(() => this._renderShell()); else this._renderShell(); })
     );
     this.querySelectorAll("[data-action]").forEach(el => el.addEventListener("click", (e) => this._handleAction(el, e)));
     // Live toggle of weekday chips visually before save
@@ -639,6 +668,23 @@ class WakePlannerPanel extends HTMLElement {
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function eventTimeLabel(evt) {
+  const raw = evt?.start?.dateTime || evt?.start?.date_time || evt?.start;
+  if (!raw || typeof raw !== "string" || raw.length <= 10) return ""; // all-day
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch { return ""; }
 }
 
 function cryptoRandomId() {
