@@ -38,6 +38,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     hass.data[f"{DOMAIN}_ws_registered"] = True
 
     websocket_api.async_register_command(hass, ws_get_state)
+    websocket_api.async_register_command(hass, ws_get_schedule)
     websocket_api.async_register_command(hass, ws_add_person)
     websocket_api.async_register_command(hass, ws_remove_person)
     websocket_api.async_register_command(hass, ws_update_person)
@@ -71,6 +72,20 @@ async def ws_get_state(hass: HomeAssistant, connection: websocket_api.ActiveConn
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
     connection.send_result(msg["id"], _serialise_state(coordinator))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "wake_planner/get_schedule",
+    vol.Optional("days", default=14): vol.All(int, vol.Range(min=1, max=60)),
+})
+@websocket_api.async_response
+async def ws_get_schedule(hass, connection, msg):
+    coordinator = _first_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
+        return
+    schedule = await coordinator.async_get_schedule(msg.get("days", 14))
+    connection.send_result(msg["id"], {"schedule": schedule})
 
 
 @websocket_api.websocket_command({

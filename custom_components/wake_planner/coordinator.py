@@ -353,6 +353,46 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             skip_titles=skip_titles,
         )
 
+    async def async_get_schedule(self, days: int = 14) -> list[dict[str, Any]]:
+        """Return per-day, per-person decisions for the next `days` days.
+
+        Used by the panel's 14-day overview so holidays, date-range rules and
+        calendar overrides apply to future days too — not just today.
+        """
+        now = dt_util.now()
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=days)
+        calendar_decisions = await self.calendar_source.async_get_decisions(
+            [p.slug for p in self.persons], start, end
+        )
+        holiday_map = await async_holiday_map(
+            self.hass,
+            self.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
+            start.date(),
+            end.date(),
+            self.options.get(CONF_MANUAL_HOLIDAY_DATES),
+        )
+        engine = RuleEngine(
+            runtime_states=self.runtime_states,
+            calendar_decisions=calendar_decisions,
+            holiday_by_date=holiday_map,
+            holiday_behavior=self.options.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
+        )
+        out: list[dict[str, Any]] = []
+        for offset in range(days):
+            day = (start + timedelta(days=offset)).date()
+            day_entry: dict[str, Any] = {
+                "date": day.isoformat(),
+                "holiday_name": holiday_map.get(day, (False, None))[1],
+                "is_holiday": holiday_map.get(day, (False, None))[0],
+                "persons": {},
+            }
+            for person in self.persons:
+                decision = engine._decide_for_date(person, day, now)  # noqa: SLF001
+                day_entry["persons"][person.slug] = decision.as_dict()
+            out.append(day_entry)
+        return out
+
     def serialize_person(self, person: PersonConfig) -> dict[str, Any]:
         """Return a JSON-friendly dict for a person + their current state."""
         decision = self.data.get(person.slug) if self.data else None
