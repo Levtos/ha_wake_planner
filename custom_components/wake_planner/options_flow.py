@@ -182,8 +182,8 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
         self._log_step("shift_cycle_setup", user_input)
         if user_input is not None:
             if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
-                self._num_shift_slots = int(user_input[CONF_NUM_SHIFT_SLOTS])
-                self._shift_anchor_date = str(user_input[CONF_SHIFT_ANCHOR_DATE]).strip()
+                self._num_shift_slots = int(user_input.get(CONF_NUM_SHIFT_SLOTS) or 1)
+                self._shift_anchor_date = str(user_input.get(CONF_SHIFT_ANCHOR_DATE) or "").strip()
                 self._shift_slots = []
                 self._shift_slot_index = 0
                 return await self.async_step_shift_slot()

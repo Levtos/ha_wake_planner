@@ -16,12 +16,12 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_calendar_entity_id": "Write wake events to calendar"
+          "write_to_calendar": "Write wake events to the configured calendar"
         }
       },
       "weekly_profile": {
         "title": "Weekly plan",
-        "description": "Configure active days and wake times.",
+        "description": "Set a global wake time to apply to all active days at once, or configure each day individually.",
         "data": {
           "mon_active": "Mon active",
           "mon_wake_time": "Mon – Wake time",
@@ -36,7 +36,8 @@
           "sat_active": "Sat active",
           "sat_wake_time": "Sat – Wake time",
           "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
+          "sun_wake_time": "Sun – Wake time",
+          "global_wake_time": "Global wake time (HH:MM, applies to all active days)"
         }
       },
       "sleep_target": {
@@ -115,7 +116,7 @@
         "data": {
           "calendar_entity_id": "Home Assistant calendar",
           "holiday_calendar_entity_id": "Holiday/vacation calendar",
-          "write_calendar_entity_id": "Write wake events to calendar"
+          "write_to_calendar": "Write wake events to the configured calendar"
         }
       },
       "person": {
@@ -141,8 +142,10 @@
           "sat_active": "Sat active",
           "sat_wake_time": "Sat – Wake time",
           "sun_active": "Sun active",
-          "sun_wake_time": "Sun – Wake time"
-        }
+          "sun_wake_time": "Sun – Wake time",
+          "global_wake_time": "Global wake time (HH:MM, applies to all active days)"
+        },
+        "description": "Set a global wake time to apply to all active days at once, or configure each day individually."
       },
       "sleep_target": {
         "title": "Edit sleep settings",

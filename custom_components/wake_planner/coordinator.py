@@ -27,6 +27,7 @@ from .const import (
     CONF_SLUG,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
     CONF_WRITE_CALENDAR_ENTITY_ID,
+    CONF_WRITE_TO_CALENDAR,
     DAYS,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
@@ -201,7 +202,12 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
 
     async def async_write_calendar_events(self) -> None:
         """Write planned wake events to the configured write calendar for the next 14 days."""
-        write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
+        # New boolean flag: write to the same calendar configured for reading
+        if self.options.get(CONF_WRITE_TO_CALENDAR):
+            write_entity_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
+        else:
+            # Legacy: separate write-calendar entity selector
+            write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
         if not write_entity_id:
             return
         now = dt_util.now()

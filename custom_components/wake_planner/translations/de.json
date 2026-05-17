@@ -16,13 +16,14 @@
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
+          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
         }
       },
       "weekly_profile": {
         "title": "Wochenplan",
-        "description": "Aktive Tage und Weckzeiten konfigurieren.",
+        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
         "data": {
+          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
           "mon_active": "Mo aktiv",
           "mon_wake_time": "Mo – Weckzeit",
           "tue_active": "Di aktiv",
@@ -115,7 +116,7 @@
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
           "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
+          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
         }
       },
       "person": {
@@ -127,7 +128,9 @@
       },
       "weekly_profile": {
         "title": "Wochenplan bearbeiten",
+        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
         "data": {
+          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
           "mon_active": "Mo aktiv",
           "mon_wake_time": "Mo – Weckzeit",
           "tue_active": "Di aktiv",

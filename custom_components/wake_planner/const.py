@@ -27,7 +27,8 @@ CONF_CALDAV_USERNAME = "caldav_username"
 CONF_CALDAV_PASSWORD = "caldav_password"
 CONF_CALENDAR_WAKE_PATTERN = "calendar_wake_pattern"
 CONF_CALENDAR_SKIP_TITLES = "calendar_skip_titles"
-CONF_WRITE_CALENDAR_ENTITY_ID = "write_calendar_entity_id"
+CONF_WRITE_CALENDAR_ENTITY_ID = "write_calendar_entity_id"  # kept for backward compat
+CONF_WRITE_TO_CALENDAR = "write_to_calendar"
 
 CONF_SHIFT_CYCLE = "shift_cycle"
 CONF_SHIFT_ANCHOR_DATE = "anchor_date"
