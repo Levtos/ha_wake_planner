@@ -1,4 +1,7 @@
-"""Options flow for Wake Planner."""
+"""Options flow for Wake Planner — calendars + holiday defaults only.
+
+People and rules are managed in the Wake Planner sidebar panel.
+"""
 
 from __future__ import annotations
 
@@ -9,240 +12,60 @@ from homeassistant import config_entries
 
 from .config_flow import (
     CALENDAR_OPTION_KEYS,
-    CONF_ENABLE_SHIFT_CYCLE,
-    CONF_NUM_SHIFT_SLOTS,
     SPECIAL_RULE_OPTION_KEYS,
     _calendar_schema,
     _clean_calendar_input,
     _clean_special_rules_input,
-    _person_schema,
-    _shift_cycle_setup_schema,
-    _shift_slot_schema,
-    _sleep_schema,
     _special_rules_schema,
-    _weekly_from_input,
-    _weekly_schema,
 )
-from .const import (
-    CONF_PERSONS,
-    CONF_SHIFT_ANCHOR_DATE,
-    CONF_SHIFT_CYCLE,
-    CONF_SHIFT_SLOT_DAYS,
-    CONF_SHIFT_SLOT_NAME,
-    CONF_SHIFT_SLOTS,
-    CONF_WEEKLY_PROFILE,
-)
-from .util import default_weekly_profile
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class WakePlannerOptionsFlow(config_entries.OptionsFlow):
-    """Edit Wake Planner settings without YAML."""
+    """Edit Wake Planner global options."""
 
-    def __init__(self, entry: config_entries.ConfigEntry | None = None) -> None:
-        self._entry = entry
+    def __init__(self) -> None:
         self._options: dict[str, Any] = {}
-        self._persons: list[dict[str, Any]] = []
-        self._index = 0
         self._initialized = False
-        self._special_rules_configured = False
-        self._shift_slots: list[dict] = []
-        self._shift_slot_index: int = 0
-        self._num_shift_slots: int = 0
-        self._shift_anchor_date: str = ""
 
     def _ensure_initialized(self) -> None:
-        """Load the current config entry once Home Assistant attaches it."""
         if self._initialized:
             return
-        entry = self._entry or self.config_entry
+        entry = self.config_entry
         self._options = {**entry.data, **entry.options}
-        self._persons = [dict(person) for person in self._options.get(CONF_PERSONS, [])]
-        self._index = 0
-        self._special_rules_configured = False
         self._initialized = True
 
+    def _entity_ids(self, domain: str) -> list[str]:
+        try:
+            return sorted(self.hass.states.async_entity_ids(domain))
+        except Exception:  # noqa: BLE001
+            return []
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Entry point."""
         self._ensure_initialized()
         return await self.async_step_calendar(user_input)
 
     async def async_step_calendar(self, user_input: dict[str, Any] | None = None):
-        """Edit calendar settings and holiday behavior."""
         self._ensure_initialized()
-        self._log_step("calendar", user_input)
         if user_input is not None:
             for key in CALENDAR_OPTION_KEYS:
                 self._options.pop(key, None)
             self._options.update(_clean_calendar_input(user_input))
-            return await self.async_step_person()
+            return await self.async_step_special_rules()
         return self.async_show_form(
             step_id="calendar",
-            data_schema=_calendar_schema(self._options, self._entity_ids("calendar")),
-        )
-
-    def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
-        """Log options flow progress so UI 500s leave a backend breadcrumb."""
-        _LOGGER.debug(
-            "Wake Planner options flow step=%s submitted=%s persons=%s options=%s",
-            step_id,
-            user_input is not None,
-            len(self._persons),
-            sorted(self._options),
-        )
-
-    def _entity_ids(self, domain: str) -> list[str]:
-        """Return sorted entity ids for a selector domain."""
-        try:
-            return sorted(self.hass.states.async_entity_ids(domain))
-        except Exception:  # noqa: BLE001 - options flow must stay usable while debugging
-            _LOGGER.exception(
-                "Wake Planner options flow could not load %s entity ids; "
-                "continuing with an empty selector",
-                domain,
-            )
-            return []
-
-    def _async_finish_options(self):
-        """Persist options while preserving the configured people."""
-        self._options[CONF_PERSONS] = self._persons
-        return self.async_create_entry(title="", data=self._options)
-
-    async def async_step_person(self, user_input: dict[str, Any] | None = None):
-        """Edit the current person basics."""
-        self._log_step("person", user_input)
-        if not self._persons:
-            self._persons = [{"name": "Person", "slug": "person"}]
-        person = self._persons[self._index]
-        if user_input is not None:
-            person.update({key: value or None for key, value in user_input.items()})
-            self._index += 1
-            if self._index < len(self._persons):
-                return await self.async_step_person()
-            return self._async_finish_options()
-        return self.async_show_form(
-            step_id="person",
-            data_schema=_person_schema(person, self._entity_ids("person")),
-        )
-
-    async def async_step_weekly_profile(self, user_input: dict[str, Any] | None = None):
-        """Edit weekly profile."""
-        self._log_step("weekly_profile", user_input)
-        errors: dict[str, str] = {}
-        person = self._persons[self._index]
-        if user_input is not None:
-            try:
-                person[CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
-            except ValueError:
-                errors["base"] = "invalid_time"
-            else:
-                if not self._special_rules_configured:
-                    return await self.async_step_special_rules()
-                return await self.async_step_sleep_target()
-        return self.async_show_form(
-            step_id="weekly_profile",
-            data_schema=_weekly_schema(
-                person.get(CONF_WEEKLY_PROFILE) or default_weekly_profile()
-            ),
-            errors=errors,
+            data_schema=_calendar_schema(self._entity_ids("calendar"), self._options),
         )
 
     async def async_step_special_rules(self, user_input: dict[str, Any] | None = None):
-        """Edit holiday and vacation handling."""
-        self._log_step("special_rules", user_input)
+        self._ensure_initialized()
         if user_input is not None:
             for key in SPECIAL_RULE_OPTION_KEYS:
                 self._options.pop(key, None)
             self._options.update(_clean_special_rules_input(user_input))
-            self._special_rules_configured = True
-            return await self.async_step_sleep_target()
+            return self.async_create_entry(title="", data=self._options)
         return self.async_show_form(
             step_id="special_rules",
             data_schema=_special_rules_schema(self._options),
-        )
-
-    async def async_step_sleep_target(self, user_input: dict[str, Any] | None = None):
-        """Edit sleep settings."""
-        self._log_step("sleep_target", user_input)
-        if user_input is not None:
-            from .const import CONF_TARGET_SLEEP_HOURS, CONF_WAKE_WINDOW_MINUTES
-            self._persons[self._index].update({
-                **user_input,
-                CONF_TARGET_SLEEP_HOURS: float(user_input[CONF_TARGET_SLEEP_HOURS]),
-                CONF_WAKE_WINDOW_MINUTES: int(user_input[CONF_WAKE_WINDOW_MINUTES]),
-            })
-            self._shift_slots = []
-            self._shift_slot_index = 0
-            return await self.async_step_shift_cycle_setup()
-        return self.async_show_form(
-            step_id="sleep_target",
-            data_schema=_sleep_schema(self._persons[self._index]),
-        )
-
-    async def async_step_shift_cycle_setup(self, user_input: dict[str, Any] | None = None):
-        """Ask whether this person works shifts."""
-        self._log_step("shift_cycle_setup", user_input)
-        if user_input is not None:
-            if user_input.get(CONF_ENABLE_SHIFT_CYCLE):
-                self._num_shift_slots = int(user_input.get(CONF_NUM_SHIFT_SLOTS) or 1)
-                self._shift_anchor_date = str(user_input.get(CONF_SHIFT_ANCHOR_DATE) or "").strip()
-                self._shift_slots = []
-                self._shift_slot_index = 0
-                return await self.async_step_shift_slot()
-            self._persons[self._index].pop(CONF_SHIFT_CYCLE, None)
-            self._index += 1
-            if self._index < len(self._persons):
-                return await self.async_step_person()
-            return self._async_finish_options()
-        current_cycle = self._persons[self._index].get(CONF_SHIFT_CYCLE) or {}
-        return self.async_show_form(
-            step_id="shift_cycle_setup",
-            data_schema=_shift_cycle_setup_schema(current_cycle),
-        )
-
-    async def async_step_shift_slot(self, user_input: dict[str, Any] | None = None):
-        """Configure one shift slot name and duration."""
-        self._log_step("shift_slot", user_input)
-        if user_input is not None:
-            self._shift_slots.append({
-                CONF_SHIFT_SLOT_NAME: str(user_input[CONF_SHIFT_SLOT_NAME]).strip() or f"Profile {self._shift_slot_index + 1}",
-                CONF_SHIFT_SLOT_DAYS: int(user_input[CONF_SHIFT_SLOT_DAYS]),
-            })
-            return await self.async_step_shift_slot_profile()
-        return self.async_show_form(
-            step_id="shift_slot",
-            data_schema=_shift_slot_schema(),
-            description_placeholders={
-                "slot_num": str(self._shift_slot_index + 1),
-                "total": str(self._num_shift_slots),
-            },
-        )
-
-    async def async_step_shift_slot_profile(self, user_input: dict[str, Any] | None = None):
-        """Configure weekly schedule for the current shift slot."""
-        self._log_step("shift_slot_profile", user_input)
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                self._shift_slots[-1][CONF_WEEKLY_PROFILE] = _weekly_from_input(user_input)
-            except ValueError:
-                errors["base"] = "invalid_time"
-            else:
-                self._shift_slot_index += 1
-                if self._shift_slot_index < self._num_shift_slots:
-                    return await self.async_step_shift_slot()
-                self._persons[self._index][CONF_SHIFT_CYCLE] = {
-                    CONF_SHIFT_ANCHOR_DATE: self._shift_anchor_date,
-                    CONF_SHIFT_SLOTS: self._shift_slots,
-                }
-                self._index += 1
-                if self._index < len(self._persons):
-                    return await self.async_step_person()
-                return self._async_finish_options()
-        return self.async_show_form(
-            step_id="shift_slot_profile",
-            data_schema=_weekly_schema(),
-            description_placeholders={"slot_name": self._shift_slots[-1].get(CONF_SHIFT_SLOT_NAME, "")},
-            errors=errors,
         )

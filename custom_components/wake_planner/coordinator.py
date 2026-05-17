@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 import logging
 import re
+import uuid
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,26 +13,28 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .calendar_source import CalendarSource
 from .const import (
-    CONF_CALDAV_PASSWORD,
-    CONF_CALDAV_URL,
-    CONF_CALDAV_USERNAME,
     CONF_CALENDAR_ENTITY_ID,
     CONF_CALENDAR_SKIP_TITLES,
     CONF_CALENDAR_WAKE_PATTERN,
     CONF_HOLIDAY_BEHAVIOR,
-    CONF_MANUAL_HOLIDAY_DATES,
-    CONF_PERSONS,
-    CONF_SLUG,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
-    CONF_WRITE_CALENDAR_ENTITY_ID,
+    CONF_MANUAL_HOLIDAY_DATES,
+    CONF_PERSON_ENTITY_ID,
+    CONF_PERSON_NAME,
+    CONF_PERSONS,
+    CONF_RULES,
+    CONF_SLUG,
+    CONF_WAKE_WINDOW_MINUTES,
     CONF_WRITE_TO_CALENDAR,
-    DAYS,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
+    DEFAULT_WAKE_WINDOW_MINUTES,
     DOMAIN,
+    EVENT_WAKE_TRIGGERED,
     HOLIDAY_SKIP,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -41,9 +44,10 @@ from .const import (
 )
 from .holiday_source import async_holiday_map
 from .rule_engine import RuleEngine, parse_date, parse_time
-from .util import persons_from_entry
+from .util import default_rules, persons_from_entry, rule_to_dict
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
     """Coordinate wake decisions and persisted runtime state."""
@@ -62,31 +66,32 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         self.calendar_source = self._build_calendar_source()
         self.last_update_iso: str | None = None
         self.next_wakes: dict[str, datetime | None] = {}
+        self._fired_wake_keys: set[str] = set()
+
+    # --- persistence ----------------------------------------------------
 
     async def async_load(self) -> None:
-        """Load persisted runtime state."""
         stored = await self.store.async_load() or {}
         for slug, raw in (stored.get("runtime_states") or {}).items():
             self.runtime_states[slug] = RuntimePersonState(
                 skip_next=bool(raw.get("skip_next")),
                 override_time=parse_time(raw["override_time"]) if raw.get("override_time") else None,
                 override_until=parse_date(raw.get("override_until")),
-                sleep_log=list(raw.get("sleep_log") or []),
             )
         for person in self.persons:
             self.runtime_states.setdefault(person.slug, RuntimePersonState())
 
     async def async_save(self) -> None:
-        """Persist runtime state."""
         payload: dict[str, Any] = {"runtime_states": {}}
         for slug, state in self.runtime_states.items():
             payload["runtime_states"][slug] = {
                 "skip_next": state.skip_next,
                 "override_time": state.override_time.strftime("%H:%M") if state.override_time else None,
                 "override_until": state.override_until.isoformat() if state.override_until else None,
-                "sleep_log": state.sleep_log[-90:],
             }
         await self.store.async_save(payload)
+
+    # --- core update loop ----------------------------------------------
 
     async def _async_update_data(self) -> dict[str, WakeDecision]:
         current_options = {**self.entry.data, **self.entry.options}
@@ -99,13 +104,13 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         now = dt_util.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         calendar_decisions = await self.calendar_source.async_get_decisions(
-            [person.slug for person in self.persons], start, start + timedelta(days=14)
+            [person.slug for person in self.persons], start, start + timedelta(days=30)
         )
         holiday_map = await async_holiday_map(
             self.hass,
             self.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID),
             start.date(),
-            (start + timedelta(days=14)).date(),
+            (start + timedelta(days=30)).date(),
             self.options.get(CONF_MANUAL_HOLIDAY_DATES),
         )
         engine = RuleEngine(
@@ -120,26 +125,55 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             if slug in data:
                 data[slug].next_wake = next_wake
         self.last_update_iso = now.isoformat()
+
+        self._fire_wake_events(data, now)
+
         today_str = now.date().isoformat()
         if getattr(self, "_last_write_date", None) != today_str:
             await self.async_write_calendar_events()
             self._last_write_date = today_str
         return data
 
+    def _fire_wake_events(self, data: dict[str, WakeDecision], now: datetime) -> None:
+        """Fire wake_planner_wake_triggered when a window opens for a person."""
+        for person in self.persons:
+            decision = data.get(person.slug)
+            if not decision or decision.wake_window_start is None or decision.wake_window_end is None:
+                continue
+            if not (decision.wake_window_start <= now <= decision.wake_window_end):
+                continue
+            key = f"{person.slug}:{decision.wake_window_start.isoformat()}"
+            if key in self._fired_wake_keys:
+                continue
+            self._fired_wake_keys.add(key)
+            self.hass.bus.async_fire(
+                EVENT_WAKE_TRIGGERED,
+                {
+                    "person_id": person.slug,
+                    "name": person.name,
+                    "wake_time": decision.wake_time.strftime("%H:%M") if decision.wake_time else None,
+                    "decided_by": decision.decided_by,
+                    "matched_rule_id": decision.matched_rule_id,
+                },
+            )
+        # cap memory
+        if len(self._fired_wake_keys) > 200:
+            self._fired_wake_keys = set(list(self._fired_wake_keys)[-100:])
+
     @property
     def options(self) -> dict[str, Any]:
         """Merged entry data and options."""
         return {**self.entry.data, **self.entry.options}
 
+    # --- runtime mutations ---------------------------------------------
+
     async def async_skip_next(self, person_id: str) -> None:
-        """Skip the next wake for a person."""
         state = self._runtime_for(person_id)
         state.skip_next = True
         await self.async_save()
         await self.async_request_refresh()
 
     async def async_set_override(self, person_id: str, wake_time: str, until: str | date | None) -> None:
-        """Set a manual override for a person."""
         state = self._runtime_for(person_id)
         state.override_time = parse_time(wake_time)
         state.override_until = until if isinstance(until, date) else parse_date(until)
@@ -147,7 +181,6 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_request_refresh()
 
     async def async_clear_override(self, person_id: str) -> None:
-        """Clear a person's override."""
         state = self._runtime_for(person_id)
         state.override_time = None
         state.override_until = None
@@ -155,59 +188,13 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_save()
         await self.async_request_refresh()
 
-    async def async_log_sleep(self, person_id: str, sleep_time: str, wake_time: str) -> None:
-        """Append a sleep log entry."""
-        state = self._runtime_for(person_id)
-        entry = {"sleep_time": sleep_time, "wake_time": wake_time, "logged_at": dt_util.utcnow().isoformat()}
-        state.sleep_log = [*state.sleep_log, entry][-90:]
-        await self.async_save()
-        await self.async_request_refresh()
-
-    def sleep_average_hours(self, person_id: str) -> float | None:
-        """Return average sleep duration for the last 30 log entries/days."""
-        state = self.runtime_states.get(person_id)
-        if not state or not state.sleep_log:
-            return None
-        durations: list[float] = []
-        for item in state.sleep_log[-30:]:
-            try:
-                sleep = datetime.fromisoformat(item["sleep_time"])
-                wake = datetime.fromisoformat(item["wake_time"])
-            except (KeyError, ValueError):
-                continue
-            duration = (wake - sleep).total_seconds() / 3600
-            if duration < 0:
-                duration += 24
-            durations.append(duration)
-        return round(sum(durations) / len(durations), 2) if durations else None
-
-    def suggested_bedtime(self, person: PersonConfig) -> datetime | None:
-        """Calculate suggested bedtime from target sleep duration and next wake."""
-        next_wake = self.next_wakes.get(person.slug)
-        if not next_wake:
-            return None
-        return next_wake - timedelta(hours=person.target_sleep_hours)
-
-    def _profile_wake_time(self, person: PersonConfig, day: date) -> time | None:
-        """Return the base profile wake time for a day, ignoring calendar/overrides/holidays."""
-        profile_day = DAYS[day.weekday()]
-        if person.shift_cycle:
-            slot = person.shift_cycle.active_slot(day)
-            profile = slot.weekly_profile.get(profile_day)
-        else:
-            profile = person.weekly_profile.get(profile_day)
-        if profile is None or not profile.active:
-            return None
-        return profile.wake_time
+    # --- calendar write-back -------------------------------------------
 
     async def async_write_calendar_events(self) -> None:
-        """Write planned wake events to the configured write calendar for the next 14 days."""
-        # New boolean flag: write to the same calendar configured for reading
-        if self.options.get(CONF_WRITE_TO_CALENDAR):
-            write_entity_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
-        else:
-            # Legacy: separate write-calendar entity selector
-            write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
+        """Write planned wake events to the configured calendar for the next 14 days."""
+        if not self.options.get(CONF_WRITE_TO_CALENDAR):
+            return
+        write_entity_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
         if not write_entity_id:
             return
         now = dt_util.now()
@@ -233,14 +220,26 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                     return_response=True,
                 )
             except Exception:
-                _LOGGER.debug("Could not fetch events from write calendar %s", write_entity_id)
+                _LOGGER.debug("Could not fetch events from %s", write_entity_id)
                 continue
             existing_events = (response or {}).get(write_entity_id, {}).get("events", [])
             for person in self.persons:
-                profile_time = self._profile_wake_time(person, day)
-                if profile_time is None:
+                decision = self.data.get(person.slug) if self.data else None
+                if not decision or not decision.wake_time or day != now.date():
+                    # Only write for known scheduled days; deep planning handled per-day
+                    pass
+                # Find decision for this specific day by quick re-eval (cheap)
+                from .rule_engine import RuleEngine
+                engine = RuleEngine(
+                    runtime_states=self.runtime_states,
+                    calendar_decisions={},
+                    holiday_by_date={},
+                    holiday_behavior=HOLIDAY_SKIP,
+                )
+                day_decision = engine._decide_for_date(person, day, now)  # noqa: SLF001
+                if day_decision.wake_time is None:
                     continue
-                # Determine which events to check for this person
+                profile_time = day_decision.wake_time
                 if len(self.persons) > 1:
                     candidate_events = [
                         e for e in existing_events
@@ -248,10 +247,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                         or f"[{person.slug}]" in (e.get("summary") or "")
                     ]
                 else:
-                    candidate_events = [
-                        e for e in existing_events
-                        if wake_pattern.search(e.get("summary") or "")
-                    ]
+                    candidate_events = [e for e in existing_events if wake_pattern.search(e.get("summary") or "")]
                 has_wp_event = False
                 has_user_modified = False
                 for evt in candidate_events:
@@ -274,8 +270,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                         summary += f" [{person.slug}]"
                     try:
                         await self.hass.services.async_call(
-                            "calendar",
-                            "create_event",
+                            "calendar", "create_event",
                             {
                                 "entity_id": write_entity_id,
                                 "summary": summary,
@@ -285,31 +280,63 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                             blocking=True,
                         )
                     except Exception:
-                        _LOGGER.debug(
-                            "Could not create wake event in %s for %s on %s",
-                            write_entity_id,
-                            person.slug,
-                            day,
-                        )
+                        _LOGGER.debug("Could not create wake event in %s for %s/%s", write_entity_id, person.slug, day)
 
-    async def async_update_person_config(self, person_id: str, **updates: Any) -> None:
-        """Update a person's stored configuration in the config entry and reload."""
+    # --- person / rule editing (used by services + WS API) --------------
+
+    def _options_persons(self) -> list[dict[str, Any]]:
         all_opts = {**self.entry.data, **self.entry.options}
-        persons = [dict(p) for p in all_opts.get(CONF_PERSONS, [])]
-        for i, p in enumerate(persons):
-            if p.get(CONF_SLUG) == person_id:
-                persons[i] = {**p, **updates}
-                break
+        return [dict(p) for p in (all_opts.get(CONF_PERSONS) or [])]
+
+    async def _save_persons(self, persons: list[dict[str, Any]]) -> None:
         new_options = {**self.entry.options, CONF_PERSONS: persons}
         self.hass.config_entries.async_update_entry(self.entry, options=new_options)
         self.persons = persons_from_entry(self.entry)
         await self.async_request_refresh()
 
+    async def async_add_person(self, name: str, person_entity_id: str | None = None) -> str:
+        """Create a new person with a default rule set; return its slug."""
+        slug_base = slugify(name) or f"person_{uuid.uuid4().hex[:6]}"
+        persons = self._options_persons()
+        existing = {p.get(CONF_SLUG) for p in persons}
+        slug = slug_base
+        counter = 2
+        while slug in existing:
+            slug = f"{slug_base}_{counter}"
+            counter += 1
+        persons.append({
+            CONF_SLUG: slug,
+            CONF_PERSON_NAME: name,
+            CONF_PERSON_ENTITY_ID: person_entity_id or None,
+            CONF_WAKE_WINDOW_MINUTES: DEFAULT_WAKE_WINDOW_MINUTES,
+            CONF_RULES: default_rules(),
+        })
+        await self._save_persons(persons)
+        return slug
+
+    async def async_remove_person(self, person_id: str) -> None:
+        persons = [p for p in self._options_persons() if p.get(CONF_SLUG) != person_id]
+        await self._save_persons(persons)
+
+    async def async_update_person(self, person_id: str, **updates: Any) -> None:
+        persons = self._options_persons()
+        for i, p in enumerate(persons):
+            if p.get(CONF_SLUG) == person_id:
+                persons[i] = {**p, **updates}
+                break
+        else:
+            raise ValueError(f"Unknown person {person_id}")
+        await self._save_persons(persons)
+
+    async def async_set_rules(self, person_id: str, rules: list[dict[str, Any]]) -> None:
+        await self.async_update_person(person_id, **{CONF_RULES: rules})
+
     async def async_update_global_config(self, **updates: Any) -> None:
-        """Update global (non-person) options in the config entry and reload."""
         new_options = {**self.entry.options, **updates}
         self.hass.config_entries.async_update_entry(self.entry, options=new_options)
         await self.async_request_refresh()
+
+    # --- helpers --------------------------------------------------------
 
     def _runtime_for(self, person_id: str) -> RuntimePersonState:
         if person_id not in {person.slug for person in self.persons}:
@@ -322,9 +349,23 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         return CalendarSource(
             self.hass,
             calendar_entity_id=options.get(CONF_CALENDAR_ENTITY_ID),
-            caldav_url=options.get(CONF_CALDAV_URL),
-            caldav_username=options.get(CONF_CALDAV_USERNAME),
-            caldav_password=options.get(CONF_CALDAV_PASSWORD),
             wake_pattern=options.get(CONF_CALENDAR_WAKE_PATTERN, DEFAULT_CALENDAR_WAKE_PATTERN),
             skip_titles=skip_titles,
         )
+
+    def serialize_person(self, person: PersonConfig) -> dict[str, Any]:
+        """Return a JSON-friendly dict for a person + their current state."""
+        decision = self.data.get(person.slug) if self.data else None
+        runtime = self.runtime_states.get(person.slug)
+        return {
+            "slug": person.slug,
+            "name": person.name,
+            "person_entity_id": person.person_entity_id,
+            "wake_window_minutes": person.wake_window_minutes,
+            "rules": [rule_to_dict(r) for r in person.rules],
+            "decision": decision.as_dict() if decision else None,
+            "next_wake": self.next_wakes.get(person.slug).isoformat() if self.next_wakes.get(person.slug) else None,
+            "skip_next": bool(runtime and runtime.skip_next),
+            "override_time": runtime.override_time.strftime("%H:%M") if runtime and runtime.override_time else None,
+            "override_until": runtime.override_until.isoformat() if runtime and runtime.override_until else None,
+        }

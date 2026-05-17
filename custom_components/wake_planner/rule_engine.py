@@ -6,12 +6,13 @@ from datetime import date, datetime, time, timedelta
 import logging
 
 from .const import (
-    DAYS,
     HOLIDAY_SKIP,
     HOLIDAY_WEEKEND_PROFILE,
-    WEEKEND_DAYS,
+    RULE_ACTION_SKIP,
+    RULE_ACTION_WAKE,
     CalendarDecision,
     PersonConfig,
+    Rule,
     RuntimePersonState,
     WakeDecision,
     WakeState,
@@ -25,11 +26,10 @@ def parse_time(value: str) -> time:
     parts = value.strip().split(":")
     if len(parts) not in (2, 3):
         raise ValueError("time must be in HH:MM format")
-    hour, minute = parts[:2]
-    parsed = time(int(hour), int(minute))
-    if parsed.hour > 23:
-        raise ValueError("hour must be between 0 and 23")
-    return parsed
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError("hour 0-23, minute 0-59")
+    return time(hour, minute)
 
 
 def parse_date(value: str | None) -> date | None:
@@ -44,8 +44,39 @@ def format_time(value: time | None) -> str | None:
     return value.strftime("%H:%M") if value else None
 
 
+def rule_matches(rule: Rule, day: date) -> bool:
+    """Return true if all set conditions on the rule match the given date."""
+    if not rule.enabled:
+        return False
+    if rule.weekdays is not None and day.weekday() not in rule.weekdays:
+        return False
+    if rule.date_from is not None and day < rule.date_from:
+        return False
+    if rule.date_to is not None and day > rule.date_to:
+        return False
+    if rule.specific_dates is not None and day not in rule.specific_dates:
+        return False
+    if rule.week_interval is not None and rule.week_anchor is not None and rule.week_interval > 0:
+        day_week_start = day - timedelta(days=day.weekday())
+        anchor_week_start = rule.week_anchor - timedelta(days=rule.week_anchor.weekday())
+        weeks_since = (day_week_start - anchor_week_start).days // 7
+        if weeks_since < 0 or weeks_since % rule.week_interval != 0:
+            return False
+    if (
+        rule.cycle_anchor is not None
+        and rule.cycle_length is not None
+        and rule.cycle_slot_start is not None
+        and rule.cycle_slot_length is not None
+        and rule.cycle_length > 0
+    ):
+        offset = (day - rule.cycle_anchor).days % rule.cycle_length
+        if offset < rule.cycle_slot_start or offset >= rule.cycle_slot_start + rule.cycle_slot_length:
+            return False
+    return True
+
+
 class RuleEngine:
-    """Evaluate the configured wake priority cascade."""
+    """Evaluate manual overrides, calendar/holiday gates and the person's rules."""
 
     def __init__(
         self,
@@ -55,7 +86,6 @@ class RuleEngine:
         holiday_by_date: dict[date, tuple[bool, str | None]],
         holiday_behavior: str,
     ) -> None:
-        """Initialise the engine with current source data."""
         self._runtime_states = runtime_states
         self._calendar_decisions = calendar_decisions
         self._holiday_by_date = holiday_by_date
@@ -63,17 +93,10 @@ class RuleEngine:
 
     def decide(self, person: PersonConfig, now: datetime) -> WakeDecision:
         """Decide whether and when a person should wake today."""
-        decision = self._decide_for_date(person, now.date(), now)
-        _LOGGER.debug(
-            "Wake decision for %s at %s: %s",
-            person.slug,
-            now.isoformat(),
-            decision.as_dict(),
-        )
-        return decision
+        return self._decide_for_date(person, now.date(), now)
 
-    def next_wake(self, person: PersonConfig, now: datetime, days: int = 14) -> datetime | None:
-        """Find the next scheduled or overridden wake datetime."""
+    def next_wake(self, person: PersonConfig, now: datetime, days: int = 30) -> datetime | None:
+        """Find the next scheduled or overridden wake datetime within `days`."""
         for offset in range(days + 1):
             candidate_date = now.date() + timedelta(days=offset)
             decision = self._decide_for_date(person, candidate_date, now)
@@ -84,137 +107,98 @@ class RuleEngine:
                 return candidate
         return None
 
+    # ------------------------------------------------------------------ core
+
     def _decide_for_date(self, person: PersonConfig, day: date, now: datetime) -> WakeDecision:
         runtime = self._runtime_states.setdefault(person.slug, RuntimePersonState())
-        profile_day = DAYS[day.weekday()]
+
         active_override = runtime.override_time is not None and (
             runtime.override_until is None or runtime.override_until >= day
         )
         if active_override:
-            return self._build_decision(
-                person,
-                day,
-                runtime.override_time,
-                now.tzinfo,
-                WakeState.OVERRIDDEN,
-                "override",
+            return self._build(
+                person, day, runtime.override_time, now.tzinfo,
+                WakeState.OVERRIDDEN, "override",
                 f"Manual override: {runtime.override_time.strftime('%H:%M')}",
-                profile_day,
                 skip_active=runtime.skip_next,
                 override_until=runtime.override_until,
             )
 
         if runtime.skip_next and day == now.date():
             return WakeDecision(
-                wake_time=None,
-                state=WakeState.SKIPPED,
-                decided_by="override",
-                reason="Next wake skipped manually",
-                profile_day=profile_day,
-                skip_active=True,
+                wake_time=None, state=WakeState.SKIPPED, decided_by="override",
+                reason="Next wake skipped manually", skip_active=True,
             )
 
         calendar = self._calendar_decisions.get((person.slug, day))
         if calendar and calendar.skip:
             return WakeDecision(
-                wake_time=None,
-                state=WakeState.SKIPPED,
-                decided_by="calendar",
-                reason=f"Calendar skip marker: {calendar.summary or 'all-day event'}",
-                profile_day=profile_day,
+                wake_time=None, state=WakeState.SKIPPED, decided_by="calendar",
+                reason=f"Calendar skip: {calendar.summary or 'all-day'}",
                 skip_active=runtime.skip_next,
             )
         if calendar and calendar.wake_time:
-            return self._build_decision(
-                person,
-                day,
-                calendar.wake_time,
-                now.tzinfo,
-                WakeState.SCHEDULED,
-                "calendar",
+            return self._build(
+                person, day, calendar.wake_time, now.tzinfo,
+                WakeState.SCHEDULED, "calendar",
                 f"Calendar event: {calendar.summary or calendar.wake_time.strftime('%H:%M')}",
-                profile_day,
                 skip_active=runtime.skip_next,
             )
 
         is_holiday, holiday_name = self._holiday_by_date.get(day, (False, None))
-        if is_holiday:
-            if self._holiday_behavior == HOLIDAY_SKIP:
-                return WakeDecision(
-                    wake_time=None,
-                    state=WakeState.HOLIDAY,
-                    decided_by="holiday",
-                    reason=holiday_name or "Holiday calendar event or weekend",
-                    profile_day=profile_day,
-                    holiday_name=holiday_name,
-                    skip_active=runtime.skip_next,
-                )
-            if self._holiday_behavior == HOLIDAY_WEEKEND_PROFILE and profile_day not in WEEKEND_DAYS:
-                profile_day = "saturday"
-
-        if person.shift_cycle:
-            slot = person.shift_cycle.active_slot(day)
-            profile = slot.weekly_profile.get(profile_day)
-            decided_by = "shift_cycle"
-            inactive_reason = f"Shift '{slot.name}', {profile_day.title()} inactive"
-            active_reason = f"Shift '{slot.name}', {profile_day.title()}: {profile.wake_time.strftime('%H:%M') if profile else ''}"
-        else:
-            profile = person.weekly_profile.get(profile_day)
-            decided_by = "weekly_profile"
-            inactive_reason = f"{profile_day.title()} profile inactive"
-            active_reason = f"{profile_day.title()} profile: {profile.wake_time.strftime('%H:%M') if profile else ''}"
-
-        if profile is None or not profile.active:
+        if is_holiday and self._holiday_behavior == HOLIDAY_SKIP:
             return WakeDecision(
-                wake_time=None,
-                state=WakeState.INACTIVE,
-                decided_by=decided_by,
-                reason=inactive_reason,
-                profile_day=profile_day,
-                holiday_name=holiday_name,
-                skip_active=runtime.skip_next,
+                wake_time=None, state=WakeState.HOLIDAY, decided_by="holiday",
+                reason=holiday_name or "Holiday/weekend",
+                holiday_name=holiday_name, skip_active=runtime.skip_next,
             )
 
-        return self._build_decision(
-            person,
-            day,
-            profile.wake_time,
-            now.tzinfo,
-            WakeState.SCHEDULED,
-            decided_by,
-            active_reason,
-            profile_day,
-            holiday_name=holiday_name,
-            skip_active=runtime.skip_next,
+        matched = self._match_rule(person, day)
+        if matched is None:
+            return WakeDecision(
+                wake_time=None, state=WakeState.INACTIVE, decided_by="no_rule",
+                reason="No matching rule",
+                holiday_name=holiday_name, skip_active=runtime.skip_next,
+            )
+
+        if matched.action == RULE_ACTION_SKIP:
+            return WakeDecision(
+                wake_time=None, state=WakeState.SKIPPED, decided_by=f"rule:{matched.name}",
+                reason=f"Rule '{matched.name}' skips this day",
+                holiday_name=holiday_name, skip_active=runtime.skip_next,
+                matched_rule_id=matched.id,
+            )
+
+        return self._build(
+            person, day, matched.wake_time, now.tzinfo,
+            WakeState.SCHEDULED, f"rule:{matched.name}",
+            f"Rule '{matched.name}': {matched.wake_time.strftime('%H:%M') if matched.wake_time else ''}",
+            holiday_name=holiday_name, skip_active=runtime.skip_next,
+            matched_rule_id=matched.id,
         )
 
-    def _build_decision(
-        self,
-        person: PersonConfig,
-        day: date,
-        wake_time: time,
-        tzinfo,
-        state: WakeState,
-        decided_by: str,
-        reason: str,
-        profile_day: str,
-        *,
-        holiday_name: str | None = None,
-        skip_active: bool = False,
-        override_until: date | None = None,
+    def _match_rule(self, person: PersonConfig, day: date) -> Rule | None:
+        """Return the highest-priority rule matching the day, or None."""
+        for rule in sorted(person.rules, key=lambda r: (r.priority, r.name)):
+            if rule.action == RULE_ACTION_WAKE and rule.wake_time is None:
+                continue
+            if rule_matches(rule, day):
+                return rule
+        return None
+
+    def _build(
+        self, person: PersonConfig, day: date, wake_time: time, tzinfo,
+        state: WakeState, decided_by: str, reason: str, *,
+        holiday_name: str | None = None, skip_active: bool = False,
+        override_until: date | None = None, matched_rule_id: str | None = None,
     ) -> WakeDecision:
         wake_dt = datetime.combine(day, wake_time, tzinfo=tzinfo)
         window = timedelta(minutes=person.wake_window_minutes)
         return WakeDecision(
-            wake_time=wake_time,
-            state=state,
-            decided_by=decided_by,
-            reason=reason,
-            profile_day=profile_day,
-            holiday_name=holiday_name,
-            skip_active=skip_active,
-            override_until=override_until,
+            wake_time=wake_time, state=state, decided_by=decided_by, reason=reason,
+            holiday_name=holiday_name, skip_active=skip_active, override_until=override_until,
             next_wake=wake_dt,
             wake_window_start=wake_dt - window,
             wake_window_end=wake_dt + window,
+            matched_rule_id=matched_rule_id,
         )

@@ -24,17 +24,47 @@ clear_override:
       required: true
       selector:
         text:
-log_sleep:
+add_person:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+    person_entity_id:
+      required: false
+      selector:
+        entity:
+          domain: person
+    entry_id:
+      required: false
+      selector:
+        text:
+remove_person:
   fields:
     person_id:
       required: true
       selector:
         text:
-    sleep_time:
+set_rules:
+  fields:
+    person_id:
       required: true
       selector:
-        datetime:
-    wake_time:
+        text:
+    rules:
       required: true
       selector:
-        datetime:
+        object:
+set_special_rules:
+  fields:
+    holiday_behavior:
+      required: false
+      selector:
+        select:
+          options:
+            - skip
+            - weekend_profile
+    manual_holiday_dates:
+      required: false
+      selector:
+        text:

@@ -1,416 +1,649 @@
+// Wake Planner panel — talks to the integration over the WebSocket API.
+//
+// All persistent config (people, rules, global settings) is stored in the
+// config entry and edited from here. The Python side exposes the
+// `wake_planner/*` WS commands implemented in websocket_api.py.
+
+const WEEKDAYS = [
+  { idx: 0, short: "Mon", long: "Monday" },
+  { idx: 1, short: "Tue", long: "Tuesday" },
+  { idx: 2, short: "Wed", long: "Wednesday" },
+  { idx: 3, short: "Thu", long: "Thursday" },
+  { idx: 4, short: "Fri", long: "Friday" },
+  { idx: 5, short: "Sat", long: "Saturday" },
+  { idx: 6, short: "Sun", long: "Sunday" },
+];
+
+const STYLES = `
+:host { display:block; padding:16px 20px 40px; color:var(--primary-text-color); background:var(--primary-background-color); font-family:var(--paper-font-body1_-_font-family,system-ui); }
+header { display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+header h1 { margin:0; font-size:20px; font-weight:700; }
+.tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
+.tab { background:var(--card-background-color); color:var(--primary-text-color); border:0; border-radius:14px; padding:9px 16px; min-height:38px; box-shadow:var(--ha-card-box-shadow,0 1px 3px #0002); cursor:pointer; font-size:13px; font-weight:600; }
+.tab.active { background:var(--primary-color); color:var(--text-primary-color,#fff); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+ha-card, .card { display:block; border-radius:16px; padding:16px 18px; background:var(--card-background-color); box-shadow:var(--ha-card-box-shadow,0 1px 3px #0002); margin-bottom:14px; }
+.card h2 { margin:0 0 8px; font-size:17px; font-weight:700; }
+.muted { opacity:.65; font-size:12px; }
+.row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.space { flex:1; }
+.badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
+.b-scheduled { background:#1b5e20; color:#fff; }
+.b-skipped { background:#616161; color:#fff; }
+.b-overridden { background:#ef6c00; color:#fff; }
+.b-holiday { background:#b71c1c; color:#fff; }
+.b-inactive { background:#37474f; color:#fff; }
+.b-calendar { background:#0277bd; color:#fff; }
+.time { font-size:clamp(40px,9vw,60px); font-weight:800; letter-spacing:-0.04em; margin:6px 0 4px; line-height:1; }
+.reason { opacity:.8; font-size:13px; margin:8px 0 12px; }
+button.btn { background:var(--card-background-color); color:var(--primary-text-color); border:1px solid var(--divider-color); border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer; min-height:38px; }
+button.btn.primary { background:var(--primary-color); color:var(--text-primary-color,#fff); border-color:transparent; font-weight:600; }
+button.btn.danger { background:#b71c1c; color:#fff; border-color:transparent; }
+button.btn:hover { filter:brightness(1.05); }
+button.icon-btn { background:transparent; border:0; color:inherit; cursor:pointer; padding:6px 8px; border-radius:8px; font-size:16px; }
+button.icon-btn:hover { background:var(--divider-color); }
+input[type=text], input[type=time], input[type=number], input[type=date], select, textarea {
+  background:var(--secondary-background-color); color:var(--primary-text-color);
+  border:1px solid var(--divider-color); border-radius:8px; padding:8px 10px; font-size:14px;
+  font-family:inherit; box-sizing:border-box;
+}
+input[type=checkbox] { width:18px; height:18px; cursor:pointer; accent-color:var(--primary-color); }
+label.field { display:flex; flex-direction:column; gap:4px; font-size:12px; opacity:.85; }
+label.field span.label { font-weight:600; opacity:.7; text-transform:uppercase; letter-spacing:.04em; font-size:11px; }
+.rule-card { border:1px solid var(--divider-color); border-radius:14px; padding:14px; margin-bottom:10px; background:var(--secondary-background-color); }
+.rule-card.disabled { opacity:.55; }
+.rule-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.rule-title { font-weight:700; font-size:15px; flex:1; }
+.rule-prio { font-size:11px; opacity:.6; padding:2px 6px; border-radius:6px; background:var(--card-background-color); }
+.weekday-toggle { display:inline-flex; gap:4px; flex-wrap:wrap; }
+.weekday-toggle label { display:inline-flex; align-items:center; gap:4px; padding:6px 9px; border-radius:8px; background:var(--card-background-color); cursor:pointer; font-size:12px; user-select:none; }
+.weekday-toggle label.on { background:var(--primary-color); color:var(--text-primary-color,#fff); font-weight:600; }
+.weekday-toggle label input { display:none; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,minmax(80px,1fr)); gap:4px; }
+.cal-day { border:1px solid var(--divider-color); border-radius:10px; padding:8px; min-height:84px; font-size:12px; }
+.cal-day.today { border-color:var(--primary-color); border-width:2px; }
+.cal-day.weekend { background:var(--secondary-background-color); }
+.cal-date { font-weight:700; font-size:14px; }
+.cal-wake { margin-top:4px; font-weight:600; font-size:13px; }
+.cal-wake.skip { opacity:.45; }
+.cal-evt { font-size:11px; opacity:.65; margin-top:2px; }
+.cal-scroll { overflow-x:auto; }
+section.settings-section { padding:14px 0; border-top:1px solid var(--divider-color); }
+section.settings-section:first-of-type { border-top:0; padding-top:0; }
+section.settings-section h3 { margin:0 0 4px; font-size:14px; font-weight:700; }
+.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px; }
+.modal { background:var(--card-background-color); color:var(--primary-text-color); border-radius:16px; padding:24px; max-width:560px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px #0006; }
+.modal h2 { margin:0 0 16px; font-size:18px; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 18px; border-radius:12px; font-size:13px; z-index:10000; opacity:0; transition:opacity .2s; }
+.toast.show { opacity:1; }
+.toast.error { background:#b71c1c; }
+.empty { text-align:center; padding:40px 20px; opacity:.6; }
+.toolbar-actions { display:flex; gap:8px; margin-left:auto; }
+@media (max-width:720px) { :host { padding:8px 12px 32px; } .cal-grid { grid-template-columns:repeat(7,minmax(60px,1fr)); } }
+`;
+
 class WakePlannerPanel extends HTMLElement {
+  constructor() {
+    super();
+    this._state = null;
+    this._tab = "today";
+    this._calendarEvents = {};
+    this._loaded = false;
+    this._busy = false;
+    this._editingPerson = null; // slug of person currently being edited in rule editor
+  }
+
   set hass(hass) {
+    const wasHass = !!this._hass;
     this._hass = hass;
-    if (!this._tab) this._tab = 'today';
-    if (!this._calendarEvents) this._calendarEvents = {};
-    this._fetchAndRender();
+    if (!wasHass) this._initialFetch();
+    // Lazy re-render on subsequent hass updates without re-fetching everything
+    if (this._loaded) this._renderShell();
   }
 
-  connectedCallback() { this._fetchAndRender(); }
-
-  get _wakeEntities() {
-    if (!this._hass) return [];
-    return Object.entries(this._hass.states)
-      .filter(([id]) => id.startsWith('sensor.wake_planner_') && id.endsWith('_wake_state'))
-      .map(([entityId, state]) => ({ entityId, state }));
+  connectedCallback() {
+    if (this._hass && !this._loaded) this._initialFetch();
   }
 
-  _personSlug(entityId) {
-    return entityId.replace('sensor.wake_planner_', '').replace('_wake_state', '');
+  async _initialFetch() {
+    try {
+      await this._refresh();
+    } catch (e) {
+      this._toast(`Failed to load: ${e.message || e}`, true);
+      this._loaded = true;
+      this._renderShell();
+    }
   }
 
-  _state(entityId) { return this._hass?.states?.[entityId]; }
-
-  _callService(domain, service, data) {
-    return this._hass.callService(domain, service, data);
-  }
-
-  async _skip(slug) {
-    await this._callService('wake_planner', 'skip_next', { person_id: slug });
-  }
-
-  async _override(slug) {
-    const wakeTime = prompt('Wake time (HH:MM)', '07:00');
-    if (!wakeTime) return;
-    await this._callService('wake_planner', 'set_override', { person_id: slug, wake_time: wakeTime });
-  }
-
-  async _logSleep(slug) {
-    const sleepTime = prompt('Sleep time (ISO or HH:MM)', '23:00');
-    if (!sleepTime) return;
-    const wakeTime = prompt('Wake time (ISO or HH:MM)', '07:00');
-    if (!wakeTime) return;
-    await this._callService('wake_planner', 'log_sleep', { person_id: slug, sleep_time: sleepTime, wake_time: wakeTime });
-  }
-
-  _setTab(tab) { this._tab = tab; this._fetchAndRender(); }
-
-  async _fetchAndRender() {
+  async _refresh() {
     if (!this._hass) return;
-    if (this._tab === 'calendar') await this._loadCalendarEvents();
-    this.render();
+    this._state = await this._hass.callWS({ type: "wake_planner/get_state" });
+    this._loaded = true;
+    if (this._tab === "calendar") await this._loadCalendarEvents();
+    this._renderShell();
+  }
+
+  async _ws(type, payload = {}) {
+    if (this._busy) return null;
+    this._busy = true;
+    try {
+      const result = await this._hass.callWS({ type, ...payload });
+      if (result && result.persons) this._state = result;
+      return result;
+    } catch (e) {
+      this._toast(e.message || String(e), true);
+      return null;
+    } finally {
+      this._busy = false;
+      this._renderShell();
+    }
   }
 
   async _loadCalendarEvents() {
-    const writeCalEntityId = this._getWriteCalendarEntityId();
-    const readCalEntityId = this._getReadCalendarEntityId();
-    const entities = [writeCalEntityId, readCalEntityId].filter(Boolean);
-    if (!entities.length) return;
-
-    const now = new Date();
-    const end = new Date(now);
-    end.setDate(end.getDate() + 14);
-
-    this._calendarEvents = {};
-    for (const entityId of entities) {
+    if (!this._state || !this._state.global) return;
+    const ids = [this._state.global.calendar_entity_id, this._state.global.holiday_calendar_entity_id].filter(Boolean);
+    if (!ids.length) { this._calendarEvents = {}; return; }
+    const start = new Date(); start.setHours(0,0,0,0);
+    const end = new Date(start); end.setDate(end.getDate() + 14);
+    const map = {};
+    for (const id of ids) {
       try {
         const events = await this._hass.callApi(
-          'GET',
-          `calendars/${entityId}?start=${now.toISOString()}&end=${end.toISOString()}`
+          "GET", `calendars/${id}?start=${start.toISOString()}&end=${end.toISOString()}`
         );
         for (const evt of (events || [])) {
-          const dateKey = (evt.start?.dateTime || evt.start?.date || '').substring(0, 10);
-          if (!dateKey) continue;
-          if (!this._calendarEvents[dateKey]) this._calendarEvents[dateKey] = [];
-          this._calendarEvents[dateKey].push(evt);
+          const key = (evt.start?.dateTime || evt.start?.date || "").substring(0, 10);
+          if (!key) continue;
+          (map[key] = map[key] || []).push(evt);
         }
-      } catch (e) { /* calendar may not be configured */ }
+      } catch (_e) { /* ignore */ }
     }
+    this._calendarEvents = map;
   }
 
-  _getWriteCalendarEntityId() {
-    const entity = this._wakeEntities[0];
-    if (!entity) return null;
-    return entity.state.attributes.write_calendar_entity_id || null;
+  _toast(message, isError = false) {
+    const el = document.createElement("div");
+    el.className = "toast" + (isError ? " error" : "");
+    el.textContent = message;
+    this.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("show"));
+    setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 200); }, 2500);
   }
 
-  _getReadCalendarEntityId() {
-    const entity = this._wakeEntities[0];
-    if (!entity) return null;
-    return entity.state.attributes.calendar_entity_id || null;
-  }
+  // ---------- Rendering ------------------------------------------------
 
-  render() {
-    if (!this._hass) return;
-    const people = this._wakeEntities;
-    const tabs = ['today', 'calendar', 'stats', 'settings'];
-    const labels = { today: 'Today', calendar: 'Calendar', stats: 'Statistics', settings: 'Settings' };
-    let body;
-    if (!people.length) {
-      body = '<ha-card><div class="empty"><p>No Wake Planner entities found yet.</p><p>Set up the integration under Settings → Devices &amp; Services → Add Integration → Wake Planner.</p></div></ha-card>';
-    } else if (this._tab === 'calendar') {
-      body = this._renderCalendarView(people);
-    } else {
-      body = `<div class="grid">${people.map((item) => this._renderPerson(item)).join('')}</div>`;
+  _renderShell() {
+    if (!this._loaded) {
+      this.innerHTML = `<style>${STYLES}</style><div class="empty">Loading Wake Planner…</div>`;
+      return;
     }
+    const persons = this._state?.persons || [];
+    const tabs = ["today", "calendar", "people", "settings"];
+    const labels = { today: "Today", calendar: "14 days", people: "People & rules", settings: "Settings" };
+
+    let body = "";
+    if (persons.length === 0 && this._tab !== "settings" && this._tab !== "people") {
+      body = `<div class="card empty"><h2>No persons yet</h2><p class="muted">Add the first person under <b>People & rules</b>.</p><button class="btn primary" data-tab="people">Open People & rules</button></div>`;
+    } else if (this._tab === "today") {
+      body = `<div class="grid">${persons.map(p => this._renderToday(p)).join("")}</div>`;
+    } else if (this._tab === "calendar") {
+      body = this._renderCalendar(persons);
+    } else if (this._tab === "people") {
+      body = this._renderPeople(persons);
+    } else if (this._tab === "settings") {
+      body = this._renderSettings();
+    }
+
     this.innerHTML = `
-      <style>
-        :host { display:block; padding:16px; color:var(--primary-text-color); background:var(--primary-background-color); }
-        .tabs { display:flex; gap:8px; overflow:auto; margin-bottom:16px; flex-wrap:wrap; }
-        button, .tab { border:0; border-radius:14px; padding:10px 16px; min-height:44px; background:var(--card-background-color); color:var(--primary-text-color); box-shadow:var(--ha-card-box-shadow,0 2px 6px #0002); cursor:pointer; font-size:14px; }
-        .tab.active { background:var(--primary-color); color:var(--text-primary-color,#fff); }
-        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
-        ha-card, .card { display:block; border-radius:18px; padding:18px; background:var(--card-background-color); box-shadow:var(--ha-card-box-shadow,0 2px 6px #0002); }
-        .time { font-size:clamp(42px,12vw,72px); font-weight:800; letter-spacing:-0.05em; margin:8px 0; }
-        .badge { display:inline-flex; align-items:center; border-radius:999px; padding:6px 10px; font-weight:700; text-transform:uppercase; font-size:12px; }
-        .scheduled{background:#1b5e20;color:#fff} .skipped{background:#616161;color:#fff} .overridden{background:#ef6c00;color:#fff} .holiday{background:#b71c1c;color:#fff} .inactive{background:#37474f;color:#fff} .shift_cycle{background:#1a237e;color:#fff}
-        .reason { opacity:.85; margin:12px 0; line-height:1.5; font-size:14px; }
-        .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
-        .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; min-width:560px; }
-        .cal-day { border:1px solid var(--divider-color); border-radius:10px; padding:8px; min-height:80px; }
-        .cal-day.today { border-color:var(--primary-color); border-width:2px; }
-        .cal-day.weekend { background:var(--secondary-background-color); }
-        .cal-day-header { font-size:11px; opacity:.6; margin-bottom:4px; }
-        .cal-date { font-weight:700; font-size:15px; }
-        .cal-wake { margin-top:6px; font-size:13px; font-weight:600; }
-        .cal-wake.from-calendar { color:var(--warning-color,#ef6c00); }
-        .cal-wake.from-shift { color:var(--info-color,#1976d2); }
-        .cal-evt { font-size:11px; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-        .cal-scroll { overflow-x:auto; }
-        .cal-week-label { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; min-width:560px; }
-        .cal-week-label div { font-size:11px; font-weight:700; text-align:center; opacity:.5; padding:4px; }
-        .info-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:600; background:var(--secondary-background-color); margin:2px; }
-        .empty { padding:24px; }
-        svg { width:100%; height:120px; }
-        .settings-section { margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--divider-color); }
-        .settings-section:last-child { border-bottom:0; margin-bottom:0; padding-bottom:0; }
-        .save-btn { background:var(--primary-color); color:var(--text-primary-color,#fff); border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; }
-        @media (max-width:720px) { :host { padding:8px; } }
-      </style>
+      <style>${STYLES}</style>
+      <header>
+        <h1>Wake Planner</h1>
+        <span class="muted">${persons.length} ${persons.length === 1 ? "person" : "people"}</span>
+      </header>
       <div class="tabs">
-        ${tabs.map((tab) => `<button class="tab ${this._tab === tab ? 'active' : ''}" data-tab="${tab}">${labels[tab]}</button>`).join('')}
+        ${tabs.map(t => `<button class="tab ${this._tab === t ? "active" : ""}" data-tab="${t}">${labels[t]}</button>`).join("")}
       </div>
-      ${body}`;
-    this.querySelectorAll('[data-tab]').forEach((el) => el.addEventListener('click', () => this._setTab(el.dataset.tab)));
-    this.querySelectorAll('[data-skip]').forEach((el) => el.addEventListener('click', () => this._skip(el.dataset.skip)));
-    this.querySelectorAll('[data-override]').forEach((el) => el.addEventListener('click', () => this._override(el.dataset.override)));
-    this.querySelectorAll('[data-log-sleep]').forEach((el) => el.addEventListener('click', () => this._logSleep(el.dataset.logSleep)));
-    this.querySelectorAll('[data-options]').forEach((el) => el.addEventListener('click', () => history.pushState(null, '', '/config/integrations')));
-
-    // Save weekly profile
-    this.querySelectorAll('[data-save-profile]').forEach((el) => el.addEventListener('click', async () => {
-      const slug = el.dataset.saveProfile;
-      const profile = {};
-      ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].forEach((day) => {
-        const activeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="active"]`);
-        const timeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="time"]`);
-        profile[day] = { active: activeEl?.checked ?? false, wake_time: timeEl?.value ?? '07:00' };
-      });
-      try {
-        await this._hass.callService('wake_planner', 'set_weekly_profile', { person_id: slug, profile });
-        el.textContent = '✓ Saved';
-        setTimeout(() => { el.textContent = '💾 Save weekly profile'; }, 2000);
-      } catch (e) {
-        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save weekly profile'; }, 3000);
-      }
-    }));
-
-    // Apply global time to all active days
-    this.querySelectorAll('[data-apply-global]').forEach((el) => el.addEventListener('click', () => {
-      const slug = el.dataset.applyGlobal;
-      const globalTimeEl = this.querySelector(`[data-person="${slug}"][data-type="global-time"]`);
-      const globalTime = globalTimeEl?.value;
-      if (!globalTime) return;
-      ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].forEach((day) => {
-        const activeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="active"]`);
-        const timeEl = this.querySelector(`[data-person="${slug}"][data-day="${day}"][data-type="time"]`);
-        if (activeEl?.checked && timeEl) timeEl.value = globalTime;
-      });
-    }));
-
-    // Save sleep settings
-    this.querySelectorAll('[data-save-sleep]').forEach((el) => el.addEventListener('click', async () => {
-      const slug = el.dataset.saveSleep;
-      const hoursEl = this.querySelector(`[data-person="${slug}"][data-type="sleep-hours"]`);
-      const windowEl = this.querySelector(`[data-person="${slug}"][data-type="wake-window"]`);
-      try {
-        await this._hass.callService('wake_planner', 'set_sleep_settings', {
-          person_id: slug,
-          target_sleep_hours: parseFloat(hoursEl?.value || 7.5),
-          wake_window_minutes: parseInt(windowEl?.value || 5),
-        });
-        el.textContent = '✓ Saved'; setTimeout(() => { el.textContent = '💾 Save sleep settings'; }, 2000);
-      } catch (e) {
-        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save sleep settings'; }, 3000);
-      }
-    }));
-
-    // Save special rules (shown on settings tab)
-    this.querySelectorAll('[data-save-rules]').forEach((el) => el.addEventListener('click', async () => {
-      const behaviorEl = this.querySelector('[data-type="holiday-behavior"]');
-      const datesEl = this.querySelector('[data-type="manual-dates"]');
-      try {
-        await this._hass.callService('wake_planner', 'set_special_rules', {
-          holiday_behavior: behaviorEl?.value || 'skip',
-          manual_holiday_dates: datesEl?.value || '',
-        });
-        el.textContent = '✓ Saved'; setTimeout(() => { el.textContent = '💾 Save special rules'; }, 2000);
-      } catch (e) {
-        el.textContent = '✗ Error'; setTimeout(() => { el.textContent = '💾 Save special rules'; }, 3000);
-      }
-    }));
+      ${body}
+    `;
+    this._wireEvents();
   }
 
-  _renderPerson({ entityId, state }) {
-    const slug = this._personSlug(entityId);
-    const name = state.attributes.friendly_name?.replace(' Wake state', '') || slug;
-    if (this._tab === 'stats') return this._renderStats(slug, name);
-    if (this._tab === 'settings') return this._renderSettings(slug, name, state);
-    return this._renderToday(slug, name, state);
-  }
-
-  _renderToday(slug, name, state) {
-    const next = this._state(`sensor.wake_planner_${slug}_next_wake`);
-    const bedtime = this._state(`sensor.wake_planner_${slug}_suggested_bedtime`);
-    const displayTime = next?.state && next.state !== 'unknown' && next.state !== 'unavailable'
-      ? new Date(next.state).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-    const bedDisplay = bedtime?.state && bedtime.state !== 'unknown' && bedtime.state !== 'unavailable'
-      ? new Date(bedtime.state).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-    const decidedBy = state.attributes.decided_by || '—';
-    const isCalOverride = decidedBy === 'calendar';
-    const isShift = decidedBy === 'shift_cycle';
-    const badgeClass = isCalOverride ? 'overridden' : isShift ? 'shift_cycle' : state.state;
+  _renderToday(person) {
+    const dec = person.decision || {};
+    const nextWake = person.next_wake ? new Date(person.next_wake) : null;
+    const displayTime = nextWake ? nextWake.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
+    const dayLabel = nextWake ? nextWake.toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }) : "";
+    const decidedBy = dec.decided_by || "";
+    let badgeClass = `b-${dec.state || "inactive"}`;
+    if (decidedBy === "calendar") badgeClass = "b-calendar";
+    const overrideInfo = person.override_time
+      ? `<div class="muted">Override active: ${person.override_time}${person.override_until ? ` until ${person.override_until}` : ""}</div>`
+      : "";
+    const skipInfo = person.skip_next ? `<div class="muted">⚠ Next wake will be skipped</div>` : "";
     return `<ha-card>
-      <h2 style="margin:0 0 12px">${name}</h2>
-      <span class="badge ${badgeClass}">${isShift ? '⏰ Shift' : isCalOverride ? '📅 Calendar override' : state.state}</span>
+      <div class="row">
+        <h2>${escapeHtml(person.name)}</h2>
+        <span class="space"></span>
+        <span class="badge ${badgeClass}">${dec.state || "inactive"}</span>
+      </div>
       <div class="time">${displayTime}</div>
-      <div class="reason">${state.attributes.reason || ''}</div>
-      <div style="font-size:14px;opacity:.8">Bedtime suggestion: <b>${bedDisplay}</b></div>
-      <div class="actions">
-        <button data-skip="${slug}">Skip next</button>
-        <button data-override="${slug}">Set override</button>
-        <button data-log-sleep="${slug}">Log sleep</button>
+      <div class="muted">${dayLabel}</div>
+      <div class="reason">${escapeHtml(dec.reason || "")}</div>
+      ${overrideInfo}${skipInfo}
+      <div class="row" style="margin-top:14px">
+        <button class="btn" data-action="skip" data-person="${person.slug}">Skip next</button>
+        <button class="btn" data-action="override" data-person="${person.slug}">Override…</button>
+        ${person.override_time || person.skip_next ? `<button class="btn" data-action="clear-override" data-person="${person.slug}">Clear</button>` : ""}
       </div>
     </ha-card>`;
   }
 
-  _renderCalendarView(people) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const days = [];
+  _renderCalendar(persons) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dayHeaders = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    // Align grid to Monday
+    const firstDow = (today.getDay() + 6) % 7;
+    const cells = [];
+    // Empty leading cells
+    for (let i = 0; i < firstDow; i++) cells.push(`<div class="cal-day" style="opacity:.3"></div>`);
     for (let i = 0; i < 14; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      days.push(d);
-    }
-
-    const cells = days.map((d) => {
-      const dateKey = d.toISOString().substring(0, 10);
-      const isToday = d.getTime() === today.getTime();
+      const d = new Date(today); d.setDate(d.getDate() + i);
+      const key = d.toISOString().substring(0, 10);
+      const isToday = i === 0;
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-      const events = this._calendarEvents[dateKey] || [];
+      const events = this._calendarEvents[key] || [];
 
-      let wakeHtml = '';
-      for (const { entityId, state } of people) {
-        const slug = this._personSlug(entityId);
-        const name = people.length > 1 ? `<span style="opacity:.6;font-size:11px">${slug}: </span>` : '';
+      const wakes = persons.map(p => {
+        const dec = p.decision || {};
         if (isToday) {
-          const wakeTime = state.attributes.wake_time;
-          const decidedBy = state.attributes.decided_by || '';
-          const cls = decidedBy === 'calendar' ? 'from-calendar' : decidedBy === 'shift_cycle' ? 'from-shift' : '';
-          const indicator = decidedBy === 'calendar' ? ' 📅' : decidedBy === 'shift_cycle' ? ' 🔄' : '';
-          wakeHtml += `<div class="cal-wake ${cls}">${name}${wakeTime || state.state}${indicator}</div>`;
-        } else {
-          const wakeEvt = events.find((e) => /wake:\s*\d{1,2}:\d{2}/i.test(e.summary || e.title || ''));
-          if (wakeEvt) {
-            const m = (wakeEvt.summary || wakeEvt.title || '').match(/wake:\s*(\d{1,2}:\d{2})/i);
-            wakeHtml += `<div class="cal-wake from-calendar">${name}${m ? m[1] : '?'} 📅</div>`;
-          }
+          if (!dec.wake_time) return `<div class="cal-wake skip">${escapeHtml(p.name)}: —</div>`;
+          return `<div class="cal-wake">${escapeHtml(p.name)}: ${dec.wake_time}</div>`;
         }
-      }
+        const wakeEvt = events.find(e => /wake:\s*\d{1,2}:\d{2}/i.test(e.summary || ""));
+        if (wakeEvt) {
+          const m = (wakeEvt.summary || "").match(/wake:\s*(\d{1,2}:\d{2})/i);
+          return `<div class="cal-wake">${escapeHtml(p.name)}: ${m ? m[1] : "?"} 📅</div>`;
+        }
+        return "";
+      }).join("");
 
-      const evtHtml = events
-        .filter((e) => !/wake:/i.test(e.summary || e.title || ''))
-        .slice(0, 2)
-        .map((e) => `<div class="cal-evt">• ${e.summary || e.title || '?'}</div>`)
-        .join('');
+      const otherEvts = events.filter(e => !/wake:/i.test(e.summary || "")).slice(0, 2)
+        .map(e => `<div class="cal-evt">• ${escapeHtml(e.summary || "")}</div>`).join("");
 
-      return `<div class="cal-day${isToday ? ' today' : ''}${isWeekend ? ' weekend' : ''}">
-        <div class="cal-day-header">${dayNames[d.getDay()]}</div>
-        <div class="cal-date">${d.getDate()}</div>
-        ${wakeHtml}
-        ${evtHtml}
-      </div>`;
-    });
-
-    const noCalWarning = !this._getWriteCalendarEntityId() && !this._getReadCalendarEntityId()
-      ? '<span class="info-chip" style="color:var(--error-color,red)">⚠ No calendar configured</span>'
-      : '';
-    const legend = `<div style="margin-top:12px;font-size:12px;opacity:.7">
-      <span class="info-chip">📅 Calendar override</span>
-      <span class="info-chip">🔄 Shift cycle</span>
-      ${noCalWarning}
-    </div>`;
-
+      cells.push(`<div class="cal-day${isToday ? " today" : ""}${isWeekend ? " weekend" : ""}">
+        <div class="cal-date">${d.getDate()}.${d.getMonth() + 1}.</div>
+        ${wakes}${otherEvts}
+      </div>`);
+    }
     return `<ha-card>
-      <h2 style="margin:0 0 16px">Next 14 days</h2>
+      <h2>Next 14 days</h2>
+      <p class="muted">Today's wake times come from the rule engine; future days show wake events written to the calendar (if enabled).</p>
       <div class="cal-scroll">
-        <div class="cal-week-label">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => `<div>${d}</div>`).join('')}</div>
-        <div class="cal-grid">${cells.join('')}</div>
+        <div class="cal-grid" style="margin-bottom:6px">${dayHeaders.map(d => `<div class="muted" style="text-align:center;font-size:11px;font-weight:600;padding:4px">${d}</div>`).join("")}</div>
+        <div class="cal-grid">${cells.join("")}</div>
       </div>
-      ${legend}
     </ha-card>`;
   }
 
-  _renderStats(slug, name) {
-    const avg = this._state(`sensor.wake_planner_${slug}_sleep_duration_avg`);
-    const value = Number(avg?.state || 0);
-    const bar = Math.min(100, Math.max(0, value / 10 * 100));
-    return `<ha-card>
-      <h2 style="margin:0 0 12px">${name}</h2>
-      <p>Average sleep: <b>${avg?.state !== 'unknown' && avg?.state ? avg.state + ' h' : '—'}</b></p>
-      <svg viewBox="0 0 100 40">
-        <rect x="0" y="10" width="100" height="20" rx="4" fill="var(--divider-color)"></rect>
-        <rect x="0" y="10" width="${bar}" height="20" rx="4" fill="var(--primary-color)"></rect>
-      </svg>
-      <p style="font-size:13px;opacity:.7">Log sleep with the "Log sleep" button on the Today tab. Last 90 entries are stored.</p>
-      <button data-log-sleep="${slug}">Log sleep</button>
+  _renderPeople(persons) {
+    const list = persons.length
+      ? persons.map(p => this._renderPersonCard(p)).join("")
+      : `<div class="card empty"><p>No persons yet. Add the first one to get started.</p></div>`;
+    return `${list}
+      <ha-card>
+        <h2>Add person</h2>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="add-name" placeholder="Name" style="flex:1;min-width:160px">
+          <button class="btn primary" data-action="add-person">Add</button>
+        </div>
+        <p class="muted" style="margin-top:8px">A default weekday-mornings rule (Mon–Fri 07:00) is created automatically. You can edit or delete it afterwards.</p>
+      </ha-card>`;
+  }
+
+  _renderPersonCard(person) {
+    const rulesHtml = (person.rules || []).length
+      ? (person.rules || []).map((r, idx) => this._renderRule(person.slug, r, idx)).join("")
+      : `<p class="muted">No rules yet — without a rule this person will be inactive.</p>`;
+    return `<ha-card data-person-card="${person.slug}">
+      <div class="row">
+        <h2>${escapeHtml(person.name)}</h2>
+        <span class="muted">slug: ${person.slug}</span>
+        <span class="space"></span>
+        <button class="btn" data-action="rename-person" data-person="${person.slug}">Rename</button>
+        <button class="btn danger" data-action="remove-person" data-person="${person.slug}">Delete</button>
+      </div>
+      <p class="muted" style="margin:8px 0 12px">Rules are evaluated in priority order (lowest number first). The first matching rule wins.</p>
+      <div data-rules-list="${person.slug}">${rulesHtml}</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" data-action="add-rule" data-person="${person.slug}">+ Add rule</button>
+        <span class="space"></span>
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <span class="label">Wake window (min)</span>
+          <input type="number" min="1" max="120" value="${person.wake_window_minutes || 5}" data-window-for="${person.slug}" style="width:80px">
+        </label>
+        <button class="btn" data-action="save-window" data-person="${person.slug}">Save</button>
+      </div>
     </ha-card>`;
   }
 
-  _renderSettings(slug, name, state) {
-    const wp = state.attributes.weekly_profile || {};
-    const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-    const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  _renderRule(slug, rule, index) {
+    const wd = new Set(rule.weekdays || []);
+    const weekdaysHtml = WEEKDAYS.map(d => `
+      <label class="${wd.has(d.idx) ? "on" : ""}" title="${d.long}">
+        <input type="checkbox" data-rule-wd="${slug}|${rule.id}|${d.idx}" ${wd.has(d.idx) ? "checked" : ""}>
+        ${d.short}
+      </label>`).join("");
 
-    const profileRows = DAYS.map((day, i) => {
-      const dp = wp[day] || {active: i < 5, wake_time: '07:00'};
-      const checked = dp.active ? 'checked' : '';
-      return `<tr>
-          <td style="font-weight:600;padding:6px 10px 6px 0">${DAY_LABELS[i]}</td>
-          <td style="padding:4px 10px"><input type="checkbox" data-person="${slug}" data-day="${day}" data-type="active" ${checked} style="width:18px;height:18px;cursor:pointer"></td>
-          <td style="padding:4px 0"><input type="time" data-person="${slug}" data-day="${day}" data-type="time" value="${dp.wake_time}" style="padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"></td>
-      </tr>`;
-    }).join('');
+    const actionWake = rule.action === "wake" || !rule.action;
+    return `<div class="rule-card${rule.enabled ? "" : " disabled"}">
+      <div class="rule-head">
+        <input type="text" value="${escapeHtml(rule.name || "Rule")}" data-rule-field="${slug}|${rule.id}|name" style="flex:1;font-weight:600">
+        <span class="rule-prio">prio ${rule.priority}</span>
+        <label class="row" style="gap:4px;font-size:12px">
+          <input type="checkbox" ${rule.enabled ? "checked" : ""} data-rule-field="${slug}|${rule.id}|enabled">
+          on
+        </label>
+        <button class="icon-btn" title="Delete rule" data-action="delete-rule" data-person="${slug}" data-rule="${rule.id}">🗑</button>
+      </div>
+      <div class="row" style="gap:14px">
+        <label class="field"><span class="label">Action</span>
+          <select data-rule-field="${slug}|${rule.id}|action">
+            <option value="wake" ${actionWake ? "selected" : ""}>Wake at</option>
+            <option value="skip" ${rule.action === "skip" ? "selected" : ""}>Skip (no wake)</option>
+          </select>
+        </label>
+        <label class="field" style="${actionWake ? "" : "visibility:hidden"}"><span class="label">Time</span>
+          <input type="time" value="${rule.wake_time || "07:00"}" data-rule-field="${slug}|${rule.id}|wake_time">
+        </label>
+        <label class="field"><span class="label">Priority</span>
+          <input type="number" value="${rule.priority}" data-rule-field="${slug}|${rule.id}|priority" style="width:80px">
+        </label>
+      </div>
+      <div style="margin:10px 0 6px"><span class="label" style="font-size:11px;opacity:.7;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Weekdays (any match)</span></div>
+      <div class="weekday-toggle">${weekdaysHtml}</div>
 
-    const sleepHours = state.attributes.target_sleep_hours || 7.5;
-    const wakeWindow = state.attributes.wake_window_minutes || 5;
-    const holidayBehavior = state.attributes.holiday_behavior || 'skip';
-    const manualDates = state.attributes.manual_holiday_dates || '';
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:12px;opacity:.75">Advanced conditions (date range, alternating weeks, shift cycle, one-off dates)</summary>
+        <div class="row" style="gap:14px;margin-top:10px">
+          <label class="field"><span class="label">From date</span>
+            <input type="date" value="${rule.date_from || ""}" data-rule-field="${slug}|${rule.id}|date_from">
+          </label>
+          <label class="field"><span class="label">To date</span>
+            <input type="date" value="${rule.date_to || ""}" data-rule-field="${slug}|${rule.id}|date_to">
+          </label>
+        </div>
+        <div class="row" style="gap:14px;margin-top:10px">
+          <label class="field"><span class="label">Every N weeks</span>
+            <input type="number" min="1" value="${rule.week_interval || ""}" placeholder="2" data-rule-field="${slug}|${rule.id}|week_interval" style="width:90px">
+          </label>
+          <label class="field"><span class="label">Week anchor (a Monday)</span>
+            <input type="date" value="${rule.week_anchor || ""}" data-rule-field="${slug}|${rule.id}|week_anchor">
+          </label>
+        </div>
+        <div class="row" style="gap:14px;margin-top:10px">
+          <label class="field" style="flex:1;min-width:220px"><span class="label">Specific dates (YYYY-MM-DD, comma-separated)</span>
+            <input type="text" value="${(rule.specific_dates || []).join(", ")}" placeholder="2026-06-15, 2026-12-24" data-rule-field="${slug}|${rule.id}|specific_dates">
+          </label>
+        </div>
+        <div class="row" style="gap:14px;margin-top:10px">
+          <label class="field"><span class="label">Cycle anchor</span>
+            <input type="date" value="${rule.cycle_anchor || ""}" data-rule-field="${slug}|${rule.id}|cycle_anchor">
+          </label>
+          <label class="field"><span class="label">Cycle length (days)</span>
+            <input type="number" min="1" value="${rule.cycle_length || ""}" data-rule-field="${slug}|${rule.id}|cycle_length" style="width:120px">
+          </label>
+          <label class="field"><span class="label">Slot start (day)</span>
+            <input type="number" min="0" value="${rule.cycle_slot_start ?? ""}" data-rule-field="${slug}|${rule.id}|cycle_slot_start" style="width:110px">
+          </label>
+          <label class="field"><span class="label">Slot length (days)</span>
+            <input type="number" min="1" value="${rule.cycle_slot_length || ""}" data-rule-field="${slug}|${rule.id}|cycle_slot_length" style="width:120px">
+          </label>
+        </div>
+      </details>
 
+      <div class="row" style="margin-top:12px">
+        <span class="space"></span>
+        <button class="btn primary" data-action="save-rule" data-person="${slug}" data-rule="${rule.id}">Save rule</button>
+      </div>
+    </div>`;
+  }
+
+  _renderSettings() {
+    const g = this._state.global || {};
+    const calOptions = this._calendarEntityOptions();
     return `<ha-card>
-        <h2 style="margin:0 0 20px">${name}</h2>
-
-        <div class="settings-section">
-            <h3 style="margin:0 0 4px;font-size:15px">Weekly Profile</h3>
-            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Configure which days Wake Planner is active and the wake time for each.</p>
-            <div style="margin-bottom:10px">
-                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
-                    <span style="opacity:.7">Set all active days to:</span>
-                    <input type="time" data-person="${slug}" data-type="global-time" style="padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px">
-                    <button data-apply-global="${slug}" style="padding:5px 10px;font-size:12px">Apply</button>
-                </label>
-            </div>
-            <table style="border-collapse:collapse;width:100%"><tbody>${profileRows}</tbody></table>
-            <div style="margin-top:12px">
-                <button data-save-profile="${slug}" class="save-btn">💾 Save weekly profile</button>
-            </div>
+      <h2>Global settings</h2>
+      <section class="settings-section">
+        <h3>Calendars</h3>
+        <p class="muted">Wake events with titles like <code>wake: 06:30</code> override that day's rule. All-day events with titles matching <code>no-wake</code>/<code>schlaf aus</code> skip the day.</p>
+        <div class="row" style="gap:14px;margin-top:8px">
+          <label class="field" style="flex:1;min-width:200px"><span class="label">Wake calendar (read & optional write)</span>
+            <select data-global-field="calendar_entity_id">
+              <option value="">— none —</option>
+              ${calOptions.map(o => `<option value="${o.id}" ${o.id === g.calendar_entity_id ? "selected" : ""}>${escapeHtml(o.name)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field" style="flex:1;min-width:200px"><span class="label">Holiday calendar (all-day events)</span>
+            <select data-global-field="holiday_calendar_entity_id">
+              <option value="">— none —</option>
+              ${calOptions.map(o => `<option value="${o.id}" ${o.id === g.holiday_calendar_entity_id ? "selected" : ""}>${escapeHtml(o.name)}</option>`).join("")}
+            </select>
+          </label>
         </div>
-
-        <div class="settings-section">
-            <h3 style="margin:0 0 4px;font-size:15px">Sleep Settings</h3>
-            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Target sleep duration determines the suggested bedtime. Wake window controls how long before the wake time the "wake needed" sensor activates.</p>
-            <div style="display:flex;gap:16px;flex-wrap:wrap">
-                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
-                    Target sleep:
-                    <input type="number" min="4" max="12" step="0.5" value="${sleepHours}" data-person="${slug}" data-type="sleep-hours" style="width:60px;padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"> h
-                </label>
-                <label style="font-size:13px;display:flex;align-items:center;gap:8px">
-                    Wake window:
-                    <input type="number" min="1" max="60" value="${wakeWindow}" data-person="${slug}" data-type="wake-window" style="width:60px;padding:6px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px"> min
-                </label>
-            </div>
-            <div style="margin-top:12px">
-                <button data-save-sleep="${slug}" class="save-btn">💾 Save sleep settings</button>
-            </div>
+        <label class="row" style="margin-top:10px">
+          <input type="checkbox" ${g.write_to_calendar ? "checked" : ""} data-global-field="write_to_calendar">
+          Write planned wake events into the wake calendar
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3>Weekends &amp; holidays</h3>
+        <div class="row" style="gap:14px;margin-top:8px">
+          <label class="field"><span class="label">Behaviour</span>
+            <select data-global-field="holiday_behavior">
+              <option value="skip" ${g.holiday_behavior === "skip" ? "selected" : ""}>Skip wake (incl. weekends)</option>
+              <option value="weekend_profile" ${g.holiday_behavior === "weekend_profile" ? "selected" : ""}>Treat as weekend (use Sat-rule)</option>
+            </select>
+          </label>
+          <label class="field" style="flex:1;min-width:220px"><span class="label">Manual holiday dates / ranges</span>
+            <input type="text" value="${escapeHtml(g.manual_holiday_dates || "")}" data-global-field="manual_holiday_dates" placeholder="2026-12-25, 12-26, 2026-07-01..2026-07-14">
+          </label>
         </div>
-
-        <div class="settings-section">
-            <h3 style="margin:0 0 4px;font-size:15px">Special Rules</h3>
-            <p style="font-size:12px;opacity:.65;margin:0 0 12px">These settings apply to all persons.</p>
-            <label style="font-size:13px;display:block;margin-bottom:10px">
-                Weekend / Holiday behavior:<br>
-                <select data-type="holiday-behavior" style="margin-top:6px;padding:8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:14px;width:100%">
-                    <option value="skip" ${holidayBehavior === 'skip' ? 'selected' : ''}>Skip wake</option>
-                    <option value="weekend_profile" ${holidayBehavior === 'weekend_profile' ? 'selected' : ''}>Use weekend profile</option>
-                </select>
-            </label>
-            <label style="font-size:13px;display:block">
-                Manual holiday/vacation dates (comma-separated, e.g. 2025-12-25, 12-26, 2025-07-01..2025-07-14):<br>
-                <input type="text" data-type="manual-dates" value="${manualDates}" placeholder="YYYY-MM-DD, MM-DD, YYYY-MM-DD..YYYY-MM-DD" style="margin-top:6px;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px">
-            </label>
-            <div style="margin-top:12px">
-                <button data-save-rules="1" class="save-btn">💾 Save special rules</button>
-            </div>
-        </div>
-
-        <div class="settings-section">
-            <h3 style="margin:0 0 4px;font-size:15px">Advanced / Shift Cycle</h3>
-            <p style="font-size:12px;opacity:.65;margin:0 0 12px">Shift cycle and calendar settings are configured via the integration options.</p>
-            <button data-options="1">Open integration options</button>
-        </div>
+        <p class="muted" style="margin-top:8px">Formats: <code>YYYY-MM-DD</code>, <code>MM-DD</code> (yearly), ranges with <code>..</code>, comma separated.</p>
+      </section>
+      <div class="row" style="margin-top:14px">
+        <span class="space"></span>
+        <button class="btn primary" data-action="save-global">Save global settings</button>
+      </div>
     </ha-card>`;
+  }
+
+  _calendarEntityOptions() {
+    if (!this._hass) return [];
+    return Object.entries(this._hass.states)
+      .filter(([id]) => id.startsWith("calendar."))
+      .map(([id, s]) => ({ id, name: s.attributes?.friendly_name || id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // ---------- Event wiring --------------------------------------------
+
+  _wireEvents() {
+    this.querySelectorAll("[data-tab]").forEach(el =>
+      el.addEventListener("click", () => { this._tab = el.dataset.tab; if (this._tab === "calendar") this._loadCalendarEvents().then(() => this._renderShell()); else this._renderShell(); })
+    );
+    this.querySelectorAll("[data-action]").forEach(el => el.addEventListener("click", (e) => this._handleAction(el, e)));
+    // Live toggle of weekday chips visually before save
+    this.querySelectorAll(".weekday-toggle input").forEach(input =>
+      input.addEventListener("change", () => input.closest("label").classList.toggle("on", input.checked))
+    );
+  }
+
+  async _handleAction(el) {
+    const action = el.dataset.action;
+    const slug = el.dataset.person;
+    if (action === "skip") await this._ws("wake_planner/skip_next", { person_id: slug });
+    else if (action === "clear-override") await this._ws("wake_planner/clear_override", { person_id: slug });
+    else if (action === "override") this._openOverrideDialog(slug);
+    else if (action === "add-person") {
+      const name = this.querySelector("#add-name")?.value?.trim();
+      if (!name) return this._toast("Enter a name", true);
+      await this._ws("wake_planner/add_person", { name });
+      this._tab = "people";
+    }
+    else if (action === "remove-person") {
+      const person = this._state.persons.find(p => p.slug === slug);
+      if (!confirm(`Delete ${person?.name || slug}? Rules and runtime state will be lost.`)) return;
+      await this._ws("wake_planner/remove_person", { person_id: slug });
+    }
+    else if (action === "rename-person") this._openRenameDialog(slug);
+    else if (action === "add-rule") await this._addRule(slug);
+    else if (action === "delete-rule") await this._deleteRule(slug, el.dataset.rule);
+    else if (action === "save-rule") await this._saveRule(slug, el.dataset.rule);
+    else if (action === "save-window") await this._saveWindow(slug);
+    else if (action === "save-global") await this._saveGlobal();
+  }
+
+  _collectRuleFields(slug, ruleId) {
+    const out = {};
+    this.querySelectorAll(`[data-rule-field^="${slug}|${ruleId}|"]`).forEach(input => {
+      const field = input.dataset.ruleField.split("|")[2];
+      if (input.type === "checkbox") out[field] = input.checked;
+      else if (input.type === "number") {
+        const v = input.value.trim();
+        out[field] = v === "" ? null : Number(v);
+      } else {
+        out[field] = input.value;
+      }
+    });
+    const weekdays = [];
+    this.querySelectorAll(`[data-rule-wd^="${slug}|${ruleId}|"]`).forEach(input => {
+      if (input.checked) weekdays.push(Number(input.dataset.ruleWd.split("|")[2]));
+    });
+    out.weekdays = weekdays.length ? weekdays : null;
+    // Normalise
+    if (out.specific_dates && typeof out.specific_dates === "string") {
+      const parts = out.specific_dates.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+      out.specific_dates = parts.length ? parts : null;
+    }
+    for (const k of ["date_from", "date_to", "week_anchor", "cycle_anchor"]) {
+      if (out[k] === "") out[k] = null;
+    }
+    if (out.action === "skip") out.wake_time = null;
+    return out;
+  }
+
+  async _saveRule(slug, ruleId) {
+    const person = this._state.persons.find(p => p.slug === slug);
+    if (!person) return;
+    const updated = this._collectRuleFields(slug, ruleId);
+    const rules = person.rules.map(r => r.id === ruleId ? { ...r, ...updated, id: r.id } : r);
+    const ok = await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+    if (ok) this._toast("Rule saved");
+  }
+
+  async _addRule(slug) {
+    const person = this._state.persons.find(p => p.slug === slug);
+    if (!person) return;
+    const newRule = {
+      id: cryptoRandomId(),
+      name: "New rule",
+      priority: 50,
+      enabled: true,
+      weekdays: [0,1,2,3,4],
+      action: "wake",
+      wake_time: "07:00",
+    };
+    const rules = [...person.rules, newRule];
+    await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+  }
+
+  async _deleteRule(slug, ruleId) {
+    const person = this._state.persons.find(p => p.slug === slug);
+    if (!person) return;
+    if (!confirm("Delete this rule?")) return;
+    const rules = person.rules.filter(r => r.id !== ruleId);
+    await this._ws("wake_planner/set_rules", { person_id: slug, rules });
+  }
+
+  async _saveWindow(slug) {
+    const el = this.querySelector(`[data-window-for="${slug}"]`);
+    const minutes = Math.max(1, Math.min(120, parseInt(el?.value || "5", 10)));
+    const ok = await this._ws("wake_planner/update_person", { person_id: slug, wake_window_minutes: minutes });
+    if (ok) this._toast("Saved");
+  }
+
+  async _saveGlobal() {
+    const payload = {};
+    this.querySelectorAll("[data-global-field]").forEach(el => {
+      const key = el.dataset.globalField;
+      if (el.type === "checkbox") payload[key] = el.checked;
+      else payload[key] = el.value;
+    });
+    const ok = await this._ws("wake_planner/set_global", payload);
+    if (ok) this._toast("Settings saved");
+  }
+
+  _openOverrideDialog(slug) {
+    const person = this._state.persons.find(p => p.slug === slug);
+    const initialTime = person?.override_time || person?.decision?.wake_time || "07:00";
+    const initialUntil = person?.override_until || "";
+    this._openModal(`Override for ${escapeHtml(person?.name || slug)}`, `
+      <label class="field"><span class="label">Wake time</span>
+        <input type="time" id="ov-time" value="${initialTime}">
+      </label>
+      <label class="field" style="margin-top:12px"><span class="label">Until (optional)</span>
+        <input type="date" id="ov-until" value="${initialUntil}">
+      </label>
+      <p class="muted" style="margin-top:8px">Leave empty for one-day override; the override applies to every day up to and including this date.</p>
+    `, async (modal) => {
+      const wake = modal.querySelector("#ov-time").value;
+      const until = modal.querySelector("#ov-until").value || null;
+      await this._ws("wake_planner/set_override", { person_id: slug, wake_time: wake, until });
+    });
+  }
+
+  _openRenameDialog(slug) {
+    const person = this._state.persons.find(p => p.slug === slug);
+    this._openModal(`Rename ${escapeHtml(person?.name || slug)}`, `
+      <label class="field"><span class="label">Name</span>
+        <input type="text" id="rn-name" value="${escapeHtml(person?.name || "")}">
+      </label>
+    `, async (modal) => {
+      const name = modal.querySelector("#rn-name").value.trim();
+      if (!name) return;
+      await this._ws("wake_planner/update_person", { person_id: slug, name });
+    });
+  }
+
+  _openModal(title, bodyHtml, onConfirm) {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal" role="dialog">
+        <h2>${title}</h2>
+        ${bodyHtml}
+        <div class="modal-actions">
+          <button class="btn" data-modal-cancel>Cancel</button>
+          <button class="btn primary" data-modal-confirm>OK</button>
+        </div>
+      </div>`;
+    this.appendChild(backdrop);
+    backdrop.addEventListener("click", e => { if (e.target === backdrop) backdrop.remove(); });
+    backdrop.querySelector("[data-modal-cancel]").addEventListener("click", () => backdrop.remove());
+    backdrop.querySelector("[data-modal-confirm]").addEventListener("click", async () => {
+      try { await onConfirm(backdrop); } finally { backdrop.remove(); }
+    });
   }
 }
-customElements.define('wake-planner-panel', WakePlannerPanel);
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function cryptoRandomId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return "r-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+customElements.define("wake-planner-panel", WakePlannerPanel);

@@ -2,108 +2,15 @@
   "title": "Wake Planner",
   "config": {
     "step": {
-      "person": {
-        "title": "Person hinzufügen",
-        "description": "Erstelle ein Weckprofil. Die Home-Assistant-Person ist optional.",
+      "user": {
+        "title": "Wake Planner einrichten",
+        "description": "Wähle die Kalender, die Wake Planner lesen soll (beide optional – kannst du auch später in den Einstellungen ergänzen). Personen und Regeln werden nach dem Setup im Wake-Planner-Seitenpanel verwaltet.",
         "data": {
-          "name": "Name",
-          "person_entity_id": "Home-Assistant-Person-Entity-ID"
-        }
-      },
-      "calendar": {
-        "title": "Kalenderquellen",
-        "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
-        "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
-        }
-      },
-      "weekly_profile": {
-        "title": "Wochenplan",
-        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
-        "data": {
-          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
-          "mon_active": "Mo aktiv",
-          "mon_wake_time": "Mo – Weckzeit",
-          "tue_active": "Di aktiv",
-          "tue_wake_time": "Di – Weckzeit",
-          "wed_active": "Mi aktiv",
-          "wed_wake_time": "Mi – Weckzeit",
-          "thu_active": "Do aktiv",
-          "thu_wake_time": "Do – Weckzeit",
-          "fri_active": "Fr aktiv",
-          "fri_wake_time": "Fr – Weckzeit",
-          "sat_active": "Sa aktiv",
-          "sat_wake_time": "Sa – Weckzeit",
-          "sun_active": "So aktiv",
-          "sun_wake_time": "So – Weckzeit"
-        }
-      },
-      "sleep_target": {
-        "title": "Schlafziel und Weckfenster",
-        "data": {
-          "target_sleep_hours": "Ziel-Schlafdauer (h)",
-          "wake_window_minutes": "Weckfenster-Toleranz (min)"
-        },
-        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
-      },
-      "shift_cycle_setup": {
-        "title": "Schichtsystem",
-        "description": "Aktiviere einen rotierenden Schichtplan. Das Ankerdatum ist der erste Kalendertag, an dem Profil 1 gilt (JJJJ-MM-TT). Anzahl der Profile und Ankerdatum werden nur verwendet, wenn das Schichtsystem aktiviert ist.",
-        "data": {
-          "enable_shift_cycle": "Schichtsystem aktivieren",
-          "num_slots": "Anzahl der Schichtprofile",
-          "anchor_date": "Ankerdatum für Profil 1 (JJJJ-MM-TT)"
-        }
-      },
-      "shift_slot": {
-        "title": "Schichtprofil {slot_num} von {total}",
-        "description": "Benenne dieses Profil und lege fest, wie viele aufeinanderfolgende Tage es gilt, bevor das nächste Profil aktiv wird.",
-        "data": {
-          "slot_name": "Profilname",
-          "duration_days": "Dauer (Tage)"
-        }
-      },
-      "shift_slot_profile": {
-        "title": "Wochenplan für \"{slot_name}\"",
-        "description": "Aktive Tage und Weckzeiten innerhalb dieses Schichtprofils.",
-        "data": {
-          "mon_active": "Mo aktiv",
-          "mon_wake_time": "Mo – Weckzeit",
-          "tue_active": "Di aktiv",
-          "tue_wake_time": "Di – Weckzeit",
-          "wed_active": "Mi aktiv",
-          "wed_wake_time": "Mi – Weckzeit",
-          "thu_active": "Do aktiv",
-          "thu_wake_time": "Do – Weckzeit",
-          "fri_active": "Fr aktiv",
-          "fri_wake_time": "Fr – Weckzeit",
-          "sat_active": "Sa aktiv",
-          "sat_wake_time": "Sa – Weckzeit",
-          "sun_active": "So aktiv",
-          "sun_wake_time": "So – Weckzeit"
-        }
-      },
-      "more_people": {
-        "title": "Weitere Personen?",
-        "data": {
-          "add_another": "Weitere Person hinzufügen"
-        }
-      },
-      "special_rules": {
-        "title": "Sonderregeln",
-        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
-        "data": {
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
-          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
+          "calendar_entity_id": "Weck-Kalender (Events wie 'wake: 06:30' überschreiben den Tag)",
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender (ganztägige Ereignisse)",
+          "write_to_calendar": "Geplante Weckzeiten in den Weck-Kalender schreiben"
         }
       }
-    },
-    "error": {
-      "invalid_name": "Gib einen gültigen Namen ein.",
-      "duplicate_person": "Eine Person mit diesem Namen existiert bereits.",
-      "invalid_time": "Gib Weckzeiten als HH:MM ein."
     },
     "abort": {
       "already_configured": "Wake Planner ist bereits konfiguriert."
@@ -112,101 +19,26 @@
   "options": {
     "step": {
       "calendar": {
-        "title": "Kalender bearbeiten",
+        "title": "Kalender",
         "data": {
-          "calendar_entity_id": "Home-Assistant-Kalender",
+          "calendar_entity_id": "Weck-Kalender",
           "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
-          "write_to_calendar": "Weckzeiten in den konfigurierten Kalender schreiben"
-        }
-      },
-      "person": {
-        "title": "Person bearbeiten",
-        "data": {
-          "name": "Name",
-          "person_entity_id": "Home-Assistant-Person-Entity-ID"
-        }
-      },
-      "weekly_profile": {
-        "title": "Wochenplan bearbeiten",
-        "description": "Globale Weckzeit setzen (gilt für alle aktiven Tage) oder jeden Tag einzeln konfigurieren.",
-        "data": {
-          "global_wake_time": "Globale Weckzeit (HH:MM, gilt für alle aktiven Tage)",
-          "mon_active": "Mo aktiv",
-          "mon_wake_time": "Mo – Weckzeit",
-          "tue_active": "Di aktiv",
-          "tue_wake_time": "Di – Weckzeit",
-          "wed_active": "Mi aktiv",
-          "wed_wake_time": "Mi – Weckzeit",
-          "thu_active": "Do aktiv",
-          "thu_wake_time": "Do – Weckzeit",
-          "fri_active": "Fr aktiv",
-          "fri_wake_time": "Fr – Weckzeit",
-          "sat_active": "Sa aktiv",
-          "sat_wake_time": "Sa – Weckzeit",
-          "sun_active": "So aktiv",
-          "sun_wake_time": "So – Weckzeit"
-        }
-      },
-      "sleep_target": {
-        "title": "Schlafeinstellungen bearbeiten",
-        "data": {
-          "target_sleep_hours": "Ziel-Schlafdauer (h)",
-          "wake_window_minutes": "Weckfenster-Toleranz (min)"
-        },
-        "description": "Die Ziel-Schlafdauer wird für die empfohlene Schlafenszeit genutzt. Die Weckfenster-Toleranz legt nur fest, wie viele Minuten vor/nach der Weckzeit der wake_needed-Binary-Sensor aktiv ist; die Weckzeit wird dadurch nicht automatisch verschoben."
-      },
-      "shift_cycle_setup": {
-        "title": "Schichtsystem",
-        "description": "Aktiviere einen rotierenden Schichtplan. Das Ankerdatum ist der erste Kalendertag, an dem Profil 1 gilt (JJJJ-MM-TT). Anzahl der Profile und Ankerdatum werden nur verwendet, wenn das Schichtsystem aktiviert ist.",
-        "data": {
-          "enable_shift_cycle": "Schichtsystem aktivieren",
-          "num_slots": "Anzahl der Schichtprofile",
-          "anchor_date": "Ankerdatum für Profil 1 (JJJJ-MM-TT)"
-        }
-      },
-      "shift_slot": {
-        "title": "Schichtprofil {slot_num} von {total}",
-        "description": "Benenne dieses Profil und lege fest, wie viele aufeinanderfolgende Tage es gilt, bevor das nächste Profil aktiv wird.",
-        "data": {
-          "slot_name": "Profilname",
-          "duration_days": "Dauer (Tage)"
-        }
-      },
-      "shift_slot_profile": {
-        "title": "Wochenplan für \"{slot_name}\"",
-        "description": "Aktive Tage und Weckzeiten innerhalb dieses Schichtprofils.",
-        "data": {
-          "mon_active": "Mo aktiv",
-          "mon_wake_time": "Mo – Weckzeit",
-          "tue_active": "Di aktiv",
-          "tue_wake_time": "Di – Weckzeit",
-          "wed_active": "Mi aktiv",
-          "wed_wake_time": "Mi – Weckzeit",
-          "thu_active": "Do aktiv",
-          "thu_wake_time": "Do – Weckzeit",
-          "fri_active": "Fr aktiv",
-          "fri_wake_time": "Fr – Weckzeit",
-          "sat_active": "Sa aktiv",
-          "sat_wake_time": "Sa – Weckzeit",
-          "sun_active": "So aktiv",
-          "sun_wake_time": "So – Weckzeit"
+          "write_to_calendar": "Weckzeiten in den Weck-Kalender schreiben"
         }
       },
       "special_rules": {
-        "title": "Sonderregeln",
-        "description": "Lege fest, wie Wochenenden, Feiertage, Urlaub und manuell eingetragene Tage den Weckplan beeinflussen. Nutze YYYY-MM-DD für einmalige Tage, MM-DD für jährliche Tage (z. B. 10-21), Bereiche wie YYYY-MM-DD..YYYY-MM-DD und trenne mehrere Einträge mit Kommas.",
+        "title": "Wochenenden & Feiertage",
+        "description": "Wie Wochenenden, Feiertage und manuelle Daten den Weckplan beeinflussen. Format: YYYY-MM-DD, MM-DD (jährlich), Bereiche YYYY-MM-DD..YYYY-MM-DD, kommagetrennt.",
         "data": {
-          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen/Urlaub",
-          "manual_holiday_dates": "Manuelle Daten/Bereiche (kommagetrennt)"
+          "holiday_behavior": "Verhalten an Wochenenden/Feiertagen",
+          "manual_holiday_dates": "Manuelle Daten / Bereiche"
         }
       }
     }
   },
   "entity": {
     "binary_sensor": {
-      "wake_needed": {
-        "name": "Wecken nötig"
-      }
+      "wake_needed": { "name": "Wecken nötig" }
     },
     "sensor": {
       "wake_state": {
@@ -219,15 +51,7 @@
           "inactive": "Inaktiv"
         }
       },
-      "next_wake": {
-        "name": "Nächster Wecker"
-      },
-      "sleep_duration_avg": {
-        "name": "Durchschnittliche Schlafdauer"
-      },
-      "suggested_bedtime": {
-        "name": "Empfohlene Schlafenszeit"
-      }
+      "next_wake": { "name": "Nächster Wecker" }
     }
   },
   "services": {
@@ -235,90 +59,51 @@
       "name": "Nächsten Wecker überspringen",
       "description": "Überspringt den nächsten Wecker einer Person.",
       "fields": {
-        "person_id": {
-          "name": "Personen-ID",
-          "description": "Wake-Planner-Personenkennung."
-        }
+        "person_id": { "name": "Personen-ID", "description": "Wake-Planner-Personenkennung." }
       }
     },
     "set_override": {
       "name": "Override setzen",
       "description": "Setzt eine manuelle Weckzeit.",
       "fields": {
-        "person_id": {
-          "name": "Personen-ID"
-        },
-        "wake_time": {
-          "name": "Weckzeit"
-        },
-        "until": {
-          "name": "Bis Datum"
-        }
+        "person_id": { "name": "Personen-ID" },
+        "wake_time": { "name": "Weckzeit" },
+        "until": { "name": "Bis Datum" }
       }
     },
     "clear_override": {
       "name": "Override löschen",
       "description": "Löscht manuelle Override- und Skip-Zustände.",
+      "fields": { "person_id": { "name": "Personen-ID" } }
+    },
+    "add_person": {
+      "name": "Person hinzufügen",
+      "description": "Legt eine neue Wake-Planner-Person mit Standard-Regel Mo–Fr 07:00 an.",
       "fields": {
-        "person_id": {
-          "name": "Personen-ID"
-        }
+        "name": { "name": "Name" },
+        "person_entity_id": { "name": "HA-Person-Entity (optional)" },
+        "entry_id": { "name": "Config-Entry-ID (nur bei mehreren Wake-Planner-Einträgen nötig)" }
       }
     },
-    "log_sleep": {
-      "name": "Schlaf protokollieren",
-      "description": "Fügt einen manuellen Schlafprotokoll-Eintrag hinzu.",
-      "fields": {
-        "person_id": {
-          "name": "Personen-ID"
-        },
-        "sleep_time": {
-          "name": "Schlafenszeit"
-        },
-        "wake_time": {
-          "name": "Weckzeit"
-        }
-      }
+    "remove_person": {
+      "name": "Person entfernen",
+      "description": "Löscht eine Wake-Planner-Person inklusive aller Regeln.",
+      "fields": { "person_id": { "name": "Personen-ID" } }
     },
-    "set_weekly_profile": {
-      "name": "Wochenplan setzen",
-      "description": "Aktualisiert den wöchentlichen Weckplan einer Person.",
+    "set_rules": {
+      "name": "Regeln setzen",
+      "description": "Ersetzt die komplette Regelliste einer Person.",
       "fields": {
-        "person_id": {
-          "name": "Personen-ID",
-          "description": "Wake-Planner-Personenkennung."
-        },
-        "profile": {
-          "name": "Profil",
-          "description": "Dict mit Tagesnamen als Schlüssel, jeweils mit active (bool) und wake_time (HH:MM)."
-        }
-      }
-    },
-    "set_sleep_settings": {
-      "name": "Schlafeinstellungen setzen",
-      "description": "Aktualisiert Ziel-Schlafdauer und Weckfenster.",
-      "fields": {
-        "person_id": {
-          "name": "Personen-ID"
-        },
-        "target_sleep_hours": {
-          "name": "Ziel-Schlafdauer (h)"
-        },
-        "wake_window_minutes": {
-          "name": "Weckfenster (Minuten)"
-        }
+        "person_id": { "name": "Personen-ID" },
+        "rules": { "name": "Regelliste" }
       }
     },
     "set_special_rules": {
       "name": "Sonderregeln setzen",
       "description": "Aktualisiert Feiertagsverhalten und manuelle Feiertagsdaten.",
       "fields": {
-        "holiday_behavior": {
-          "name": "Feiertagsverhalten"
-        },
-        "manual_holiday_dates": {
-          "name": "Manuelle Feiertagsdaten"
-        }
+        "holiday_behavior": { "name": "Feiertagsverhalten" },
+        "manual_holiday_dates": { "name": "Manuelle Feiertagsdaten" }
       }
     }
   },
@@ -326,7 +111,7 @@
     "holiday_behavior": {
       "options": {
         "skip": "Wecker aussetzen",
-        "weekend_profile": "Wochenend-Profil verwenden"
+        "weekend_profile": "Wochenend-Regel (Samstag) verwenden"
       }
     }
   }
