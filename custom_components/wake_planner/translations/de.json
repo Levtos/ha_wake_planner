@@ -15,7 +15,8 @@
         "description": "Kalender sind optional. Verwende Kalender, die bereits in Home Assistant eingebunden sind. Der Feiertags-/Urlaubskalender wird über ganztägige Ereignisse ausgewertet.",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
+          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
         }
       },
       "weekly_profile": {
@@ -113,7 +114,8 @@
         "title": "Kalender bearbeiten",
         "data": {
           "calendar_entity_id": "Home-Assistant-Kalender",
-          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender"
+          "holiday_calendar_entity_id": "Feiertags-/Urlaubskalender",
+          "write_calendar_entity_id": "Weckzeiten in Kalender schreiben"
         }
       },
       "person": {

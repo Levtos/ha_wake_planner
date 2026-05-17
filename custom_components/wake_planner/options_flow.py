@@ -84,7 +84,7 @@ class WakePlannerOptionsFlow(config_entries.OptionsFlow):
 
     def _log_step(self, step_id: str, user_input: dict[str, Any] | None) -> None:
         """Log options flow progress so UI 500s leave a backend breadcrumb."""
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Wake Planner options flow step=%s submitted=%s persons=%s options=%s",
             step_id,
             user_input is not None,

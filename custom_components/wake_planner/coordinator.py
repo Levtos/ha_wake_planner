@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import logging
+import re
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -25,6 +26,8 @@ from .const import (
     CONF_PERSONS,
     CONF_SLUG,
     CONF_HOLIDAY_CALENDAR_ENTITY_ID,
+    CONF_WRITE_CALENDAR_ENTITY_ID,
+    DAYS,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
     DOMAIN,
@@ -116,6 +119,10 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             if slug in data:
                 data[slug].next_wake = next_wake
         self.last_update_iso = now.isoformat()
+        today_str = now.date().isoformat()
+        if getattr(self, "_last_write_date", None) != today_str:
+            await self.async_write_calendar_events()
+            self._last_write_date = today_str
         return data
 
     @property
@@ -179,6 +186,105 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         if not next_wake:
             return None
         return next_wake - timedelta(hours=person.target_sleep_hours)
+
+    def _profile_wake_time(self, person: PersonConfig, day: date) -> time | None:
+        """Return the base profile wake time for a day, ignoring calendar/overrides/holidays."""
+        profile_day = DAYS[day.weekday()]
+        if person.shift_cycle:
+            slot = person.shift_cycle.active_slot(day)
+            profile = slot.weekly_profile.get(profile_day)
+        else:
+            profile = person.weekly_profile.get(profile_day)
+        if profile is None or not profile.active:
+            return None
+        return profile.wake_time
+
+    async def async_write_calendar_events(self) -> None:
+        """Write planned wake events to the configured write calendar for the next 14 days."""
+        write_entity_id = self.options.get(CONF_WRITE_CALENDAR_ENTITY_ID)
+        if not write_entity_id:
+            return
+        now = dt_util.now()
+        today = now.date()
+        wake_pattern = re.compile(
+            self.options.get(CONF_CALENDAR_WAKE_PATTERN, DEFAULT_CALENDAR_WAKE_PATTERN),
+            re.IGNORECASE,
+        )
+        for offset in range(14):
+            day = today + timedelta(days=offset)
+            start_dt = datetime.combine(day, time(0, 0), tzinfo=now.tzinfo)
+            end_dt = datetime.combine(day, time(23, 59), tzinfo=now.tzinfo)
+            try:
+                response = await self.hass.services.async_call(
+                    "calendar",
+                    "get_events",
+                    {
+                        "entity_id": write_entity_id,
+                        "start_date_time": start_dt.isoformat(),
+                        "end_date_time": end_dt.isoformat(),
+                    },
+                    blocking=True,
+                    return_response=True,
+                )
+            except Exception:
+                _LOGGER.debug("Could not fetch events from write calendar %s", write_entity_id)
+                continue
+            existing_events = (response or {}).get(write_entity_id, {}).get("events", [])
+            for person in self.persons:
+                profile_time = self._profile_wake_time(person, day)
+                if profile_time is None:
+                    continue
+                # Determine which events to check for this person
+                if len(self.persons) > 1:
+                    candidate_events = [
+                        e for e in existing_events
+                        if person.name.lower() in (e.get("summary") or "").lower()
+                        or f"[{person.slug}]" in (e.get("summary") or "")
+                    ]
+                else:
+                    candidate_events = [
+                        e for e in existing_events
+                        if wake_pattern.search(e.get("summary") or "")
+                    ]
+                has_wp_event = False
+                has_user_modified = False
+                for evt in candidate_events:
+                    m = wake_pattern.search(evt.get("summary") or "")
+                    if not m:
+                        continue
+                    try:
+                        evt_h, evt_m = map(int, m.group("time").split(":"))
+                        evt_time = time(evt_h, evt_m)
+                        if evt_time == profile_time:
+                            has_wp_event = True
+                        else:
+                            has_user_modified = True
+                    except (ValueError, IndexError):
+                        pass
+                if not has_wp_event and not has_user_modified:
+                    wake_dt = datetime.combine(day, profile_time, tzinfo=now.tzinfo)
+                    summary = f"wake: {profile_time.strftime('%H:%M')}"
+                    if len(self.persons) > 1:
+                        summary += f" [{person.slug}]"
+                    try:
+                        await self.hass.services.async_call(
+                            "calendar",
+                            "create_event",
+                            {
+                                "entity_id": write_entity_id,
+                                "summary": summary,
+                                "start_date_time": wake_dt.isoformat(),
+                                "end_date_time": (wake_dt + timedelta(minutes=30)).isoformat(),
+                            },
+                            blocking=True,
+                        )
+                    except Exception:
+                        _LOGGER.debug(
+                            "Could not create wake event in %s for %s on %s",
+                            write_entity_id,
+                            person.slug,
+                            day,
+                        )
 
     def _runtime_for(self, person_id: str) -> RuntimePersonState:
         if person_id not in {person.slug for person in self.persons}:
