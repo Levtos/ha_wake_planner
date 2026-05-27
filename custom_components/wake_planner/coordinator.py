@@ -374,8 +374,6 @@ def coordinator_from_hass(hass: HomeAssistant, entry_id: str) -> WakePlannerCoor
 def all_wake_planner_coordinators(hass: HomeAssistant) -> list[WakePlannerCoordinator]:
     out: list[WakePlannerCoordinator] = []
     for bucket in hass.data.get(DOMAIN, {}).get(DATA_ENTRIES, {}).values():
-        if bucket.get("module_id") != MODULE_ID:
-            continue
         coord = bucket.get("coordinator")
         if coord is not None:
             out.append(coord)

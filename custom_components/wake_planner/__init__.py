@@ -10,7 +10,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DATA_ENTRIES, DATA_SERVICES_REGISTERED, DOMAIN, service_name
+from .const import DATA_ENTRIES, DATA_SERVICES_REGISTERED, DOMAIN, MODULE_ID, service_name
 from .coordinator import WakePlannerCoordinator
 from .panel import async_register_panel
 from .services_impl import SERVICES
@@ -51,6 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Wake Planner config entry."""
     hass.data.setdefault(DOMAIN, {DATA_ENTRIES: {}, DATA_SERVICES_REGISTERED: False})
     bucket = hass.data[DOMAIN][DATA_ENTRIES].setdefault(entry.entry_id, {})
+    bucket["module_id"] = MODULE_ID
 
     coordinator = WakePlannerCoordinator(hass, entry)
     await coordinator.async_load()

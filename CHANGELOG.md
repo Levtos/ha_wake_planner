@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 2026-05-27
+
+- Fix standalone coordinator discovery for the Wake Planner panel and WebSocket API.
+- Add a regression test for adding people via the panel after the standalone extraction.
+
 ## 1.0.0 - 2026-05-27
 
 - Release Wake Planner as a standalone HACS integration.

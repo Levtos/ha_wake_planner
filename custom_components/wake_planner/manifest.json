@@ -1,7 +1,7 @@
 {
   "domain": "wake_planner",
   "name": "Wake Planner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "config_flow": true,
   "documentation": "https://github.com/Benni-Ennos/ha_wake_planner",
   "requirements": [],
