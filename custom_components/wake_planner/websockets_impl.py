@@ -1,52 +1,34 @@
-"""WebSocket API for the Wake Planner panel."""
+"""WebSocket commands for Wake Planner."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_HOLIDAY_BEHAVIOR,
     CONF_MANUAL_HOLIDAY_DATES,
-    DOMAIN,
     HOLIDAY_SKIP,
+    MODULE_ID,
+    websocket_type,
 )
-from .coordinator import WakePlannerCoordinator
+from .coordinator import (
+    WakePlannerCoordinator,
+    all_wake_planner_coordinators,
+    coordinator_for_person,
+)
 
 
-def _first_coordinator(hass: HomeAssistant) -> WakePlannerCoordinator | None:
-    items = list(hass.data.get(DOMAIN, {}).values())
+def _wt(cmd: str) -> str:
+    return websocket_type(MODULE_ID, cmd)
+
+
+def _first(hass: HomeAssistant) -> WakePlannerCoordinator | None:
+    items = all_wake_planner_coordinators(hass)
     return items[0] if items else None
-
-
-def _coordinator_for_person(hass: HomeAssistant, person_id: str) -> WakePlannerCoordinator | None:
-    for coordinator in hass.data.get(DOMAIN, {}).values():
-        if person_id in {person.slug for person in coordinator.persons}:
-            return coordinator
-    return None
-
-
-@callback
-def async_register_websocket_api(hass: HomeAssistant) -> None:
-    """Register all wake_planner/* WebSocket commands once."""
-    if hass.data.get(f"{DOMAIN}_ws_registered"):
-        return
-    hass.data[f"{DOMAIN}_ws_registered"] = True
-
-    websocket_api.async_register_command(hass, ws_get_state)
-    websocket_api.async_register_command(hass, ws_get_schedule)
-    websocket_api.async_register_command(hass, ws_add_person)
-    websocket_api.async_register_command(hass, ws_remove_person)
-    websocket_api.async_register_command(hass, ws_update_person)
-    websocket_api.async_register_command(hass, ws_set_rules)
-    websocket_api.async_register_command(hass, ws_set_global)
-    websocket_api.async_register_command(hass, ws_skip_next)
-    websocket_api.async_register_command(hass, ws_set_override)
-    websocket_api.async_register_command(hass, ws_clear_override)
 
 
 def _serialise_state(coordinator: WakePlannerCoordinator) -> dict[str, Any]:
@@ -63,10 +45,10 @@ def _serialise_state(coordinator: WakePlannerCoordinator) -> dict[str, Any]:
     }
 
 
-@websocket_api.websocket_command({vol.Required("type"): "wake_planner/get_state"})
+@websocket_api.websocket_command({vol.Required("type"): _wt("get_state")})
 @websocket_api.async_response
-async def ws_get_state(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    coordinator = _first_coordinator(hass)
+async def ws_get_state(hass, connection, msg):
+    coordinator = _first(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
@@ -74,12 +56,12 @@ async def ws_get_state(hass: HomeAssistant, connection: websocket_api.ActiveConn
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/get_schedule",
+    vol.Required("type"): _wt("get_schedule"),
     vol.Optional("days", default=14): vol.All(int, vol.Range(min=1, max=60)),
 })
 @websocket_api.async_response
 async def ws_get_schedule(hass, connection, msg):
-    coordinator = _first_coordinator(hass)
+    coordinator = _first(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
@@ -88,13 +70,13 @@ async def ws_get_schedule(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/add_person",
+    vol.Required("type"): _wt("add_person"),
     vol.Required("name"): str,
     vol.Optional("person_entity_id"): vol.Any(str, None),
 })
 @websocket_api.async_response
 async def ws_add_person(hass, connection, msg):
-    coordinator = _first_coordinator(hass)
+    coordinator = _first(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
@@ -103,12 +85,12 @@ async def ws_add_person(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/remove_person",
+    vol.Required("type"): _wt("remove_person"),
     vol.Required("person_id"): str,
 })
 @websocket_api.async_response
 async def ws_remove_person(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
@@ -117,32 +99,43 @@ async def ws_remove_person(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/update_person",
+    vol.Required("type"): _wt("update_person"),
     vol.Required("person_id"): str,
     vol.Optional("name"): str,
     vol.Optional("person_entity_id"): vol.Any(str, None),
     vol.Optional("wake_window_minutes"): vol.All(int, vol.Range(min=1, max=120)),
+    vol.Optional("routine_duration_minutes"): vol.All(int, vol.Range(min=0, max=240)),
+    vol.Optional("calendar_conflict_behavior"): vol.In(["ignore", "warn_only", "wake_earlier"]),
 })
 @websocket_api.async_response
 async def ws_update_person(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
-    updates = {k: v for k, v in msg.items() if k in {"name", "person_entity_id", "wake_window_minutes"}}
+    updates = {
+        k: v for k, v in msg.items()
+        if k in {
+            "name",
+            "person_entity_id",
+            "wake_window_minutes",
+            "routine_duration_minutes",
+            "calendar_conflict_behavior",
+        }
+    }
     if updates:
         await coordinator.async_update_person(msg["person_id"], **updates)
     connection.send_result(msg["id"], _serialise_state(coordinator))
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/set_rules",
+    vol.Required("type"): _wt("set_rules"),
     vol.Required("person_id"): str,
     vol.Required("rules"): list,
 })
 @websocket_api.async_response
 async def ws_set_rules(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
@@ -151,7 +144,7 @@ async def ws_set_rules(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/set_global",
+    vol.Required("type"): _wt("set_global"),
     vol.Optional("holiday_behavior"): str,
     vol.Optional("manual_holiday_dates"): str,
     vol.Optional("calendar_entity_id"): vol.Any(str, None),
@@ -159,13 +152,12 @@ async def ws_set_rules(hass, connection, msg):
 })
 @websocket_api.async_response
 async def ws_set_global(hass, connection, msg):
-    coordinator = _first_coordinator(hass)
+    coordinator = _first(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_loaded", "Wake Planner not configured")
         return
     fields = {"holiday_behavior", "manual_holiday_dates", "calendar_entity_id", "holiday_calendar_entity_id"}
     updates = {k: v for k, v in msg.items() if k in fields}
-    # Drop empty strings for entity ids so they go back to "not configured"
     for entity_key in ("calendar_entity_id", "holiday_calendar_entity_id"):
         if entity_key in updates and updates[entity_key] in ("", None):
             updates[entity_key] = None
@@ -175,12 +167,12 @@ async def ws_set_global(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/skip_next",
+    vol.Required("type"): _wt("skip_next"),
     vol.Required("person_id"): str,
 })
 @websocket_api.async_response
 async def ws_skip_next(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
@@ -189,14 +181,14 @@ async def ws_skip_next(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/set_override",
+    vol.Required("type"): _wt("set_override"),
     vol.Required("person_id"): str,
     vol.Required("wake_time"): str,
     vol.Optional("until"): vol.Any(str, None),
 })
 @websocket_api.async_response
 async def ws_set_override(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
@@ -205,14 +197,28 @@ async def ws_set_override(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "wake_planner/clear_override",
+    vol.Required("type"): _wt("clear_override"),
     vol.Required("person_id"): str,
 })
 @websocket_api.async_response
 async def ws_clear_override(hass, connection, msg):
-    coordinator = _coordinator_for_person(hass, msg["person_id"])
+    coordinator = coordinator_for_person(hass, msg["person_id"])
     if not coordinator:
         connection.send_error(msg["id"], "unknown_person", "Unknown person")
         return
     await coordinator.async_clear_override(msg["person_id"])
     connection.send_result(msg["id"], _serialise_state(coordinator))
+
+
+WEBSOCKETS = [
+    ws_get_state,
+    ws_get_schedule,
+    ws_add_person,
+    ws_remove_person,
+    ws_update_person,
+    ws_set_rules,
+    ws_set_global,
+    ws_skip_next,
+    ws_set_override,
+    ws_clear_override,
+]

@@ -1,19 +1,26 @@
-"""DataUpdateCoordinator for Wake Planner."""
+"""DataUpdateCoordinator für das Wake-Planner-Modul der Toolbox.
+
+Storage-Key: `wake_planner_state_<entry_id>` via the local storage helper.
+Runtime liegt unter
+`hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]["coordinator"]`.
+"""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import logging
 import uuid
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
+from .const import DATA_ENTRIES, DOMAIN
+from .storage import make_store
+from .calendar_cache import CalendarCache
 from .calendar_source import CalendarSource
 from .const import (
     CONF_CALENDAR_ENTITY_ID,
@@ -25,17 +32,19 @@ from .const import (
     CONF_PERSON_ENTITY_ID,
     CONF_PERSON_NAME,
     CONF_PERSONS,
+    CONF_CALENDAR_CONFLICT_BEHAVIOR,
+    CONF_ROUTINE_DURATION_MINUTES,
     CONF_RULES,
     CONF_SLUG,
     CONF_WAKE_WINDOW_MINUTES,
+    CONFLICT_WARN_ONLY,
+    DEFAULT_ROUTINE_DURATION_MINUTES,
     DEFAULT_CALENDAR_SKIP_TITLES,
     DEFAULT_CALENDAR_WAKE_PATTERN,
     DEFAULT_WAKE_WINDOW_MINUTES,
-    DOMAIN,
     EVENT_WAKE_TRIGGERED,
     HOLIDAY_SKIP,
-    STORAGE_KEY,
-    STORAGE_VERSION,
+    MODULE_ID,
     PersonConfig,
     RuntimePersonState,
     WakeDecision,
@@ -48,19 +57,24 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
-    """Coordinate wake decisions and persisted runtime state."""
+    """Koordiniert Wake-Entscheidungen und persistierten Runtime-State."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_{entry.entry_id}",
+            name=f"{DOMAIN}_{MODULE_ID}_{entry.entry_id}",
             update_interval=timedelta(seconds=60),
         )
         self.entry = entry
-        self.store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
+        self.store = make_store(hass, MODULE_ID, f"state_{entry.entry_id}")
         self.runtime_states: dict[str, RuntimePersonState] = {}
         self.persons: list[PersonConfig] = persons_from_entry(entry)
+        # Shared cache so the regular wake-planner calendar, the holiday
+        # calendar and on-demand WS schedule lookups coalesce their HA
+        # calendar.get_events calls and degrade to last-known-good on
+        # CalDAV hiccups.
+        self.calendar_cache = CalendarCache(hass)
         self.calendar_source = self._build_calendar_source()
         self.last_update_iso: str | None = None
         self.next_wakes: dict[str, datetime | None] = {}
@@ -110,6 +124,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             start.date(),
             (start + timedelta(days=30)).date(),
             self.options.get(CONF_MANUAL_HOLIDAY_DATES),
+            cache=self.calendar_cache,
         )
         engine = RuleEngine(
             runtime_states=self.runtime_states,
@@ -123,12 +138,10 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             if slug in data:
                 data[slug].next_wake = next_wake
         self.last_update_iso = now.isoformat()
-
         self._fire_wake_events(data, now)
         return data
 
     def _fire_wake_events(self, data: dict[str, WakeDecision], now: datetime) -> None:
-        """Fire wake_planner_wake_triggered when a window opens for a person."""
         for person in self.persons:
             decision = data.get(person.slug)
             if not decision or decision.wake_window_start is None or decision.wake_window_end is None:
@@ -149,13 +162,11 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
                     "matched_rule_id": decision.matched_rule_id,
                 },
             )
-        # cap memory
         if len(self._fired_wake_keys) > 200:
             self._fired_wake_keys = set(list(self._fired_wake_keys)[-100:])
 
     @property
     def options(self) -> dict[str, Any]:
-        """Merged entry data and options."""
         return {**self.entry.data, **self.entry.options}
 
     # --- runtime mutations ---------------------------------------------
@@ -166,10 +177,11 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_save()
         await self.async_request_refresh()
 
-    async def async_set_override(self, person_id: str, wake_time: str, until: str | date | None) -> None:
+    async def async_set_override(self, person_id: str, wake_time: str, until) -> None:
         state = self._runtime_for(person_id)
         state.override_time = parse_time(wake_time)
-        state.override_until = until if isinstance(until, date) else parse_date(until)
+        from datetime import date as _date
+        state.override_until = until if isinstance(until, _date) else parse_date(until)
         await self.async_save()
         await self.async_request_refresh()
 
@@ -181,9 +193,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_save()
         await self.async_request_refresh()
 
-    # --- person / rule editing (used by services + WS API) --------------
-
-    # --- person / rule editing (used by services + WS API) --------------
+    # --- person / rule editing -----------------------------------------
 
     def _options_persons(self) -> list[dict[str, Any]]:
         all_opts = {**self.entry.data, **self.entry.options}
@@ -196,7 +206,6 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         await self.async_request_refresh()
 
     async def async_add_person(self, name: str, person_entity_id: str | None = None) -> str:
-        """Create a new person with a default rule set; return its slug."""
         slug_base = slugify(name) or f"person_{uuid.uuid4().hex[:6]}"
         persons = self._options_persons()
         existing = {p.get(CONF_SLUG) for p in persons}
@@ -210,6 +219,8 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             CONF_PERSON_NAME: name,
             CONF_PERSON_ENTITY_ID: person_entity_id or None,
             CONF_WAKE_WINDOW_MINUTES: DEFAULT_WAKE_WINDOW_MINUTES,
+            CONF_ROUTINE_DURATION_MINUTES: DEFAULT_ROUTINE_DURATION_MINUTES,
+            CONF_CALENDAR_CONFLICT_BEHAVIOR: CONFLICT_WARN_ONLY,
             CONF_RULES: default_rules(),
         })
         await self._save_persons(persons)
@@ -252,14 +263,47 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             calendar_entity_id=options.get(CONF_CALENDAR_ENTITY_ID),
             wake_pattern=options.get(CONF_CALENDAR_WAKE_PATTERN, DEFAULT_CALENDAR_WAKE_PATTERN),
             skip_titles=skip_titles,
+            cache=self.calendar_cache,
         )
 
-    async def async_get_schedule(self, days: int = 14) -> list[dict[str, Any]]:
-        """Return per-day, per-person decisions for the next `days` days.
+    def calendar_status(self) -> dict[str, Any]:
+        """Aggregate cache status for panel/WS consumers."""
+        opts = self.options
+        cal_status = self.calendar_cache.status_for(opts.get(CONF_CALENDAR_ENTITY_ID) or "")
+        hol_status = self.calendar_cache.status_for(
+            opts.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID) or ""
+        )
+        return {
+            "calendar": cal_status,
+            "holiday": hol_status,
+            "using_cached_calendar": cal_status.get("using_cached", False)
+            or hol_status.get("using_cached", False),
+        }
 
-        Used by the panel's 14-day overview so holidays, date-range rules and
-        calendar overrides apply to future days too — not just today.
-        """
+    async def async_refresh_calendar(self) -> dict[str, Any]:
+        """Force-refresh both calendars (bypassing the throttle) and trigger
+        a coordinator update."""
+        now = dt_util.now()
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=30)
+        cal_id = self.options.get(CONF_CALENDAR_ENTITY_ID)
+        hol_id = self.options.get(CONF_HOLIDAY_CALENDAR_ENTITY_ID)
+        results: dict[str, Any] = {}
+        if cal_id:
+            _events, status = await self.calendar_cache.async_force_refresh(cal_id, start, end)
+            results["calendar"] = status
+        if hol_id:
+            from datetime import time as _dtime
+            results_start = datetime.combine(start.date(), _dtime.min)
+            results_end = datetime.combine(end.date() + timedelta(days=1), _dtime.min)
+            _events, status = await self.calendar_cache.async_force_refresh(
+                hol_id, results_start, results_end,
+            )
+            results["holiday"] = status
+        await self.async_request_refresh()
+        return results
+
+    async def async_get_schedule(self, days: int = 14) -> list[dict[str, Any]]:
         now = dt_util.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=days)
@@ -272,6 +316,7 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             start.date(),
             end.date(),
             self.options.get(CONF_MANUAL_HOLIDAY_DATES),
+            cache=self.calendar_cache,
         )
         engine = RuleEngine(
             runtime_states=self.runtime_states,
@@ -295,7 +340,6 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
         return out
 
     def serialize_person(self, person: PersonConfig) -> dict[str, Any]:
-        """Return a JSON-friendly dict for a person + their current state."""
         decision = self.data.get(person.slug) if self.data else None
         runtime = self.runtime_states.get(person.slug)
         return {
@@ -303,10 +347,43 @@ class WakePlannerCoordinator(DataUpdateCoordinator[dict[str, WakeDecision]]):
             "name": person.name,
             "person_entity_id": person.person_entity_id,
             "wake_window_minutes": person.wake_window_minutes,
+            "routine_duration_minutes": person.routine_duration_minutes,
+            "calendar_conflict_behavior": person.calendar_conflict_behavior,
             "rules": [rule_to_dict(r) for r in person.rules],
             "decision": decision.as_dict() if decision else None,
-            "next_wake": self.next_wakes.get(person.slug).isoformat() if self.next_wakes.get(person.slug) else None,
+            "next_wake": self.next_wakes.get(person.slug).isoformat()
+                if self.next_wakes.get(person.slug) else None,
             "skip_next": bool(runtime and runtime.skip_next),
-            "override_time": runtime.override_time.strftime("%H:%M") if runtime and runtime.override_time else None,
-            "override_until": runtime.override_until.isoformat() if runtime and runtime.override_until else None,
+            "override_time": runtime.override_time.strftime("%H:%M")
+                if runtime and runtime.override_time else None,
+            "override_until": runtime.override_until.isoformat()
+                if runtime and runtime.override_until else None,
         }
+
+
+# ----------------------------------------------------------------- helpers
+
+
+def coordinator_from_hass(hass: HomeAssistant, entry_id: str) -> WakePlannerCoordinator | None:
+    bucket = hass.data.get(DOMAIN, {}).get(DATA_ENTRIES, {}).get(entry_id)
+    if not bucket:
+        return None
+    return bucket.get("coordinator")
+
+
+def all_wake_planner_coordinators(hass: HomeAssistant) -> list[WakePlannerCoordinator]:
+    out: list[WakePlannerCoordinator] = []
+    for bucket in hass.data.get(DOMAIN, {}).get(DATA_ENTRIES, {}).values():
+        if bucket.get("module_id") != MODULE_ID:
+            continue
+        coord = bucket.get("coordinator")
+        if coord is not None:
+            out.append(coord)
+    return out
+
+
+def coordinator_for_person(hass: HomeAssistant, person_id: str) -> WakePlannerCoordinator | None:
+    for coord in all_wake_planner_coordinators(hass):
+        if person_id in {p.slug for p in coord.persons}:
+            return coord
+    return None
