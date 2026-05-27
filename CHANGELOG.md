@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0 - 2026-05-27
+
+- Release Wake Planner as a standalone HACS integration.
+- Keep the extracted production behavior from the former `bennis_toolbox` module.
+
 ## 0.5.0 - 2026-05-27
 
 - Extract Wake Planner from the `bennis_toolbox` umbrella into this standalone HACS integration.
