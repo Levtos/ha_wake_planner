@@ -36,21 +36,21 @@
   },
   "entity": {
     "binary_sensor": {
-      "wake_needed": { "name": "Wecken nötig" },
-      "holiday_active": { "name": "Feiertag aktiv" }
+      "wake_needed": { "name": "Wake needed" },
+      "holiday_active": { "name": "Holiday active" }
     },
     "sensor": {
       "wake_state": {
-        "name": "Weckstatus",
+        "name": "Wake state",
         "state": {
-          "scheduled": "Geplant",
-          "skipped": "Übersprungen",
-          "overridden": "Überschrieben",
-          "holiday": "Feiertag",
-          "inactive": "Inaktiv"
+          "scheduled": "Scheduled",
+          "skipped": "Skipped",
+          "overridden": "Overridden",
+          "holiday": "Holiday",
+          "inactive": "Inactive"
         }
       },
-      "next_wake": { "name": "Nächster Wecker" }
+      "next_wake": { "name": "Next wake" }
     }
   },
   "services": {

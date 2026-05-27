@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 - 2026-05-27
+
+- Keep generated Wake Planner entity names and wake-state labels in English for German Home Assistant installations.
+
 ## 1.0.1 - 2026-05-27
 
 - Fix standalone coordinator discovery for the Wake Planner panel and WebSocket API.
