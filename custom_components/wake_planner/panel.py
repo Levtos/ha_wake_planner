@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from pathlib import Path
 
 from homeassistant.components import frontend
@@ -14,6 +15,14 @@ _LOGGER = logging.getLogger(__name__)
 
 _URL_PATH = panel_url_path(MODULE_ID)
 _STATIC_PREFIX = f"/{_URL_PATH}/frontend"
+
+
+def _asset_version() -> str:
+    manifest_path = Path(__file__).parent / "manifest.json"
+    try:
+        return str(json.loads(manifest_path.read_text(encoding="utf-8")).get("version") or "dev")
+    except (OSError, json.JSONDecodeError):
+        return "dev"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
@@ -54,7 +63,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
                 "name": "wake-planner-panel",
                 "embed_iframe": False,
                 "trust_external": False,
-                "js_url": f"{_STATIC_PREFIX}/wake-planner-panel.js",
+                "js_url": f"{_STATIC_PREFIX}/wake-planner-panel.js?v={_asset_version()}",
             }
         },
     )

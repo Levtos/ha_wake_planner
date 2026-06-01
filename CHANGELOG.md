@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.1 - 2026-06-01
+
+- Add a frontend asset cache-buster based on the integration version so Home
+  Assistant loads the updated Wake Planner panel after HACS updates.
+- Bump the manifest version for the UX rework release.
+
+## 1.1.0 - 2026-06-01
+
+- Rework the Wake Planner panel into a Dracula-inspired, German-first cockpit.
+- Add the 14-day planning overview, structured profile/rule editor, settings
+  cleanup, UX briefing, and additive `last_update_iso` WebSocket state field.
+
 ## 1.0.2 - 2026-05-27
 
 - Keep generated Wake Planner entity names and wake-state labels in English for German Home Assistant installations.
