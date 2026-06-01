@@ -250,7 +250,7 @@ label.field .label { color: var(--wp-text-muted); font-size: 11px; font-weight: 
   padding: 2px 2px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.avatar {
+.avatar, .mini-avatar {
   width: 44px;
   height: 44px;
   display: grid;
@@ -260,6 +260,14 @@ label.field .label { color: var(--wp-text-muted); font-size: 11px; font-weight: 
   color: #fff;
   font-size: 22px;
   font-weight: 800;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.avatar img, .mini-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .person-title h2 { margin: 0; font-size: 18px; }
 .person-title .muted { margin-top: 3px; }
@@ -397,11 +405,8 @@ label.field .label { color: var(--wp-text-muted); font-size: 11px; font-weight: 
 .mini-avatar {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(139, 92, 246, 0.5);
-  font-weight: 800;
+  font-size: 14px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.72), rgba(76, 29, 149, 0.7));
 }
 .main-profile { padding: 16px; min-width: 0; }
 .profile-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
@@ -749,7 +754,7 @@ class WakePlannerPanel extends HTMLElement {
     const badgeClass = dec.decided_by === "calendar" ? "b-calendar" : `b-${state}`;
     return `<article class="card today-card" data-today-card="${person.slug}">
       <div class="person-head">
-        <div class="avatar">${escapeHtml(initials(person.name))}</div>
+        ${this._avatarHtml(person, "avatar")}
         <div class="person-title">
           <h2>${escapeHtml(person.name)}</h2>
           <div class="muted">${escapeHtml(entity)}</div>
@@ -847,7 +852,7 @@ class WakePlannerPanel extends HTMLElement {
         </div>
         <div class="person-list">
           ${persons.map(p => `<button class="person-tab ${p.slug === selected?.slug ? "active" : ""}" data-select-person="${p.slug}">
-            <span class="mini-avatar">${escapeHtml(initials(p.name))}</span>
+            ${this._avatarHtml(p, "mini-avatar")}
             <span><strong>${escapeHtml(p.name)}</strong><br><span class="muted">${escapeHtml(this._personEntityLabel(p))}</span></span>
           </button>`).join("") || `<div class="muted">Noch keine Personen.</div>`}
         </div>
@@ -1363,6 +1368,23 @@ class WakePlannerPanel extends HTMLElement {
 
   _personEntityLabel(person) {
     return person.person_entity_id || "nicht verknüpft";
+  }
+
+  _personPictureUrl(person) {
+    if (!person?.person_entity_id || !this._hass?.states) return "";
+    const picture = this._hass.states[person.person_entity_id]?.attributes?.entity_picture;
+    if (!picture) return "";
+    if (/^(https?:)?\/\//.test(picture) || picture.startsWith("data:")) return picture;
+    return picture.startsWith("/") ? picture : `/${picture}`;
+  }
+
+  _avatarHtml(person, className) {
+    const picture = this._personPictureUrl(person);
+    const label = escapeHtml(person?.name || "Person");
+    if (picture) {
+      return `<span class="${className}"><img src="${escapeHtml(picture)}" alt="${label}"></span>`;
+    }
+    return `<span class="${className}" aria-label="${label}">${escapeHtml(initials(person?.name))}</span>`;
   }
 
   _statusLabel(dec = {}) {

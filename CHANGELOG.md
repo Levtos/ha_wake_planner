@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 - 2026-06-01
+
+- Show the linked Home Assistant person's `entity_picture` in Wake Planner
+  person avatars, with initials as fallback.
+
 ## 1.1.1 - 2026-06-01
 
 - Add a frontend asset cache-buster based on the integration version so Home
