@@ -30,6 +30,7 @@ restarts.
 - [Multiple people](#multiple-people)
 - [Migration from older versions](#migration-from-older-versions)
 - [Troubleshooting](#troubleshooting)
+- [UX briefing](#ux-briefing)
 - [Limitations & roadmap](#limitations--roadmap)
 - [Development](#development)
 
@@ -63,9 +64,12 @@ then restart Home Assistant.
    - **Holiday calendar** — every all-day event on this calendar marks
      that date as a holiday for rule matching (`on_holiday` condition).
 3. Open the **Wake Planner** entry in the sidebar.
-4. Add your first person on the **People & rules** tab. A default rule
-   *"Weekday mornings — Mon–Fri 07:00"* is created automatically; edit,
-   replace or expand it as needed.
+4. Add your first person on the **Profile & rules** tab. New persons start
+   with a practical profile:
+   - **Weekdays** — Mon–Fri 07:00, non-holidays only.
+   - **Weekend** — Sat–Sun 09:30.
+   - **Holidays** — Mon–Fri holidays at the weekend wake time.
+   Edit, replace or expand those rules as needed.
 
 > The integration creates one device per person. Sensors are automatically
 > grouped under that device in Home Assistant.
@@ -82,10 +86,14 @@ Four tabs:
 
 | Tab | Purpose |
 |---|---|
-| **Today** | Per-person card showing next wake time, day label, matched rule reason, and quick actions (Skip next, Override, Clear). Buttons turn green/orange when their state is active. |
-| **14 days** | 7×2 calendar grid with the per-person decision for each day (incl. holidays). Non-wake calendar events for those days appear with their start time. |
-| **People & rules** | Add/edit/delete people, link them to a `person.*` HA entity, configure their wake window, and edit the full rule list with weekday toggles + advanced conditions. |
-| **Settings** | Pick wake & holiday calendars, set the fallback holiday behaviour and the manual holiday list. |
+| **Today / Heute** | Per-person card showing today's wake decision, next wake timestamp, matched reason, and quick actions (Skip next, Override, Clear). Buttons turn green/orange when their state is active. |
+| **14 days / 14 Tage** | 7×2 calendar grid with the per-person decision for each day, including holiday names and calendar-derived wake markers. |
+| **Profile & rules / Profile & Regeln** | Add/edit/delete people, link them to a `person.*` HA entity, configure the wake window, edit the basic weekday/weekend/holiday profile, add date-based exceptions, and maintain advanced rules. |
+| **Settings / Einstellungen** | Pick wake & holiday calendars, set the fallback holiday behaviour and the manual holiday list. |
+
+The panel intentionally avoids live re-rendering on every Home Assistant state
+tick so text inputs do not lose focus while you are editing. It refreshes after
+panel actions, explicit reloads and tab switches.
 
 ---
 
@@ -334,7 +342,7 @@ services are there for automations and scripts.
 
 | Service | Purpose |
 |---|---|
-| `wake_planner.skip_next` | Skip *tomorrow's* wake for `person_id`. Cleared automatically after the day passes. |
+| `wake_planner.skip_next` | Mark the next/current wake decision as skipped for `person_id`. Clear it with `clear_override` when the temporary skip should end. |
 | `wake_planner.set_override` | Force `wake_time` (HH:MM) for `person_id`, optionally with `until` date. Affects every day up to and including `until`. |
 | `wake_planner.clear_override` | Remove both override and skip-next for a person. |
 | `wake_planner.add_person` | Create a new person with a default rule. `name`, optional `person_entity_id`, optional `entry_id` if multiple Wake Planner entries exist. |
@@ -353,13 +361,16 @@ Used internally by the panel; also handy for custom Lovelace cards or
 external clients. Every command returns the full state envelope on
 success.
 
+The state envelope includes `entry_id`, optional `last_update_iso`, `persons`
+and `global`.
+
 | Command | Payload |
 |---|---|
 | `wake_planner/get_state` | – |
 | `wake_planner/get_schedule` | `days` (1–60, default 14) |
 | `wake_planner/add_person` | `name`, optional `person_entity_id` |
 | `wake_planner/remove_person` | `person_id` |
-| `wake_planner/update_person` | `person_id`, any of `name`, `person_entity_id`, `wake_window_minutes` |
+| `wake_planner/update_person` | `person_id`, any of `name`, `person_entity_id`, `wake_window_minutes`, `routine_duration_minutes`, `calendar_conflict_behavior` |
 | `wake_planner/set_rules` | `person_id`, `rules` (list of rule dicts) |
 | `wake_planner/set_global` | `holiday_behavior`, `manual_holiday_dates`, `calendar_entity_id`, `holiday_calendar_entity_id` |
 | `wake_planner/skip_next` | `person_id` |
@@ -492,7 +503,7 @@ The following older features were removed:
 ### "No persons yet" after install
 
 Expected — the setup wizard only configures the calendars. Open the
-sidebar panel and click **People & rules → Add**.
+sidebar panel and click **Profile & rules → Add**.
 
 ### Sensors say `inactive` although I set up a rule
 
@@ -531,9 +542,22 @@ Overrides with an `until` date persist through that date inclusive. Use
 
 ### Diagnostics
 
-Settings → Devices & Services → Wake Planner → ⋮ → **Download diagnostics**
-exports the loaded persons, current decisions, calendar source status
-and runtime state. Useful when filing issues.
+There is no dedicated diagnostics export yet. For issues, include:
+
+- The integration version from `manifest.json` / HACS.
+- The relevant `sensor.wake_planner_<slug>_wake_state` attributes.
+- The person rules and global settings visible in the panel.
+- Calendar event titles that should affect the day, especially `wake: HH:MM`
+  or all-day skip events.
+
+---
+
+## UX briefing
+
+A product/UX brief for the sidebar panel lives in
+[`docs/ux_briefing.md`](docs/ux_briefing.md). It documents the target users,
+core flows, information architecture, interaction principles, accessibility
+expectations and future UX opportunities.
 
 ---
 
@@ -549,8 +573,12 @@ and runtime state. Useful when filing issues.
 - **Calendar override pattern is global**, not per-person. If you have
   multiple persons sharing one wake calendar, all of them honour the
   same `wake: HH:MM` event. Workaround: per-person calendars.
-- **No automated tests yet.** The rule engine has been built for testability
-  (pure functions, dataclasses, no I/O); tests are next on the backlog.
+- **Diagnostics export is not implemented yet.** The entity attributes and
+  panel state are currently the primary debugging surface.
+- **Test coverage is focused, not exhaustive.** The repository includes
+  pytest coverage for the rule engine, holidays, calendar cache, coordinator
+  lookup and entity output contracts; broader Home Assistant integration/UI
+  coverage is still on the backlog.
 
 ---
 
@@ -566,20 +594,24 @@ Project layout:
 ```
 custom_components/wake_planner/
 ├── __init__.py          # entry setup, services, panel registration
-├── coordinator.py       # DataUpdateCoordinator + persistence + WS helpers
+├── coordinator.py       # DataUpdateCoordinator + persistence + schedule helpers
 ├── rule_engine.py       # pure rule matcher / decision builder
 ├── util.py              # parsing, serialisation, migration
 ├── const.py             # constants + dataclasses (Rule, PersonConfig…)
 ├── calendar_source.py   # read HA calendar entities for overrides
+├── calendar_cache.py    # cached HA calendar.get_events access
 ├── holiday_source.py    # read holiday calendar + manual dates
 ├── config_flow.py       # one-step setup (calendars only)
-├── options_flow.py      # global re-config (calendars + holidays)
+├── flow.py              # shared config/options flow helpers
+├── storage.py           # local storage wrapper
 ├── services.py          # service registration
+├── services_impl.py     # service handlers and schemas
 ├── services.yaml        # service field schemas
-├── websocket_api.py     # wake_planner/* WS commands
+├── websockets_impl.py   # wake_planner/* WS commands
+├── entities.py          # shared entity/device base classes
 ├── sensor.py            # wake_state + next_wake sensors
 ├── binary_sensor.py     # wake_needed binary sensor
-├── diagnostics.py       # diagnostics export
+├── panel.py             # sidebar panel registration/static path
 ├── strings.json         # canonical i18n source
 ├── translations/
 │   ├── en.json
