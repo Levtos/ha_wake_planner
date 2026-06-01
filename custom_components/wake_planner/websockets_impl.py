@@ -35,6 +35,7 @@ def _serialise_state(coordinator: WakePlannerCoordinator) -> dict[str, Any]:
     opts = coordinator.options
     return {
         "entry_id": coordinator.entry.entry_id,
+        "last_update_iso": coordinator.last_update_iso,
         "persons": [coordinator.serialize_person(p) for p in coordinator.persons],
         "global": {
             "holiday_behavior": opts.get(CONF_HOLIDAY_BEHAVIOR, HOLIDAY_SKIP),
