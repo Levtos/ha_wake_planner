@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3 - 2026-06-01
+
+- Avoid blocking file reads in Home Assistant's event loop when registering the
+  Wake Planner panel asset URL.
+
 ## 1.1.2 - 2026-06-01
 
 - Show the linked Home Assistant person's `entity_picture` in Wake Planner

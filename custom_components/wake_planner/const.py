@@ -14,6 +14,7 @@ CONF_MODULE_ID: Final[str] = "_module_id"
 
 MODULE_ID = "wake_planner"
 NAME = "Wake Planner"
+VERSION = "1.1.3"
 
 
 def storage_key(_module_id: str, suffix: str) -> str:
