@@ -31,3 +31,13 @@ Use `AGENTS.md` as the primary repo rule source. This file is only the Claude en
 - Wake Planner calculates wake times from configured plans, calendar events, and manual exceptions.
 - The repository contains an older standalone iteration; historical handoff notes for the Toolbox extraction live in `AGENTS.md`.
 - Use `einhornzentrale` for Home Assistant context. Do not use `haos_benni`.
+
+## UX-Frontend-Standard (verbindlich)
+
+Für jede UX-/Frontend-Arbeit gilt der verbindliche, fleet-weite UX-, Technologie- und
+Designstandard. Kanonische Quelle: ADR `ha-platform/control:docs/adr/0001-ux-frontend-standard.md`
+(Issue `control#58`). Kurzform: Svelte 5 · Vite · TypeScript · Bits UI · shadcn-svelte ·
+Tailwind · CSS Custom Properties · Lucide; Design "Graphite Dark – semantic accent system";
+zentrale UX = statisches Bundle + dünnes UX-Gateway (primär HA-Ingress); versionierte/typisierte
+Contracts. Details und Abweichungsprozess: `docs/ux-frontend-standard.md` und das ADR. Bestehende
+Regeln werden dadurch ergänzt, nie überschrieben oder entfernt.

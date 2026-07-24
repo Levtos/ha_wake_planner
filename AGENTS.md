@@ -96,3 +96,13 @@ Referenz: `bennis_toolbox/modules/benni_core_user_state/`
 - Coordinator als HA-Brücke
 - Decision-Output via Sensoren — kein direktes Apply
 - Service-API über `services_impl.py`
+
+## UX-Frontend-Standard (verbindlich)
+
+Für jede UX-/Frontend-Arbeit gilt der verbindliche, fleet-weite UX-, Technologie- und
+Designstandard. Kanonische Quelle: ADR `ha-platform/control:docs/adr/0001-ux-frontend-standard.md`
+(Issue `control#58`). Kurzform: Svelte 5 · Vite · TypeScript · Bits UI · shadcn-svelte ·
+Tailwind · CSS Custom Properties · Lucide; Design "Graphite Dark – semantic accent system";
+zentrale UX = statisches Bundle + dünnes UX-Gateway (primär HA-Ingress); versionierte/typisierte
+Contracts. Details und Abweichungsprozess: `docs/ux-frontend-standard.md` und das ADR. Bestehende
+Regeln werden dadurch ergänzt, nie überschrieben oder entfernt.
